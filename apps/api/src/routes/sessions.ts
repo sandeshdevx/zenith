@@ -37,7 +37,7 @@ export function registerSessionRoutes(
   app: FastifyInstance,
   config: Config,
   pool: Pool,
-  onUserMessage?: (sessionId: string, content: string) => void,
+  onUserMessage?: (sessionId: string, content: string, messageId: string) => void,
 ) {
   /** Auth guard: token must be valid AND bound to the session in the URL. */
   function authorize(req: FastifyRequest, sessionId: string): boolean {
@@ -142,7 +142,7 @@ export function registerSessionRoutes(
         };
         return reply.code(409).send(body);
       }
-      onUserMessage?.(sessionId, parsed.data.content);
+      onUserMessage?.(sessionId, parsed.data.content, persisted.messageId);
       return reply.code(201).send(persisted);
     },
   );

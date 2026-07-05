@@ -1,12 +1,14 @@
 /**
  * Zenith background worker.
- * Phase 1: the purge job — the enforcement mechanism behind "nothing stored".
- * Deletes ended sessions immediately and inactive sessions after the
- * inactivity window. Cascades remove messages and events. Only aggregate
- * counts are recorded, never content.
+ * - Purge loop: deletes ended/inactive sessions (Phase 1).
+ * - Risk queue consumer: scores user messages off the reply path (Phase 4).
  */
 import { Pool } from "pg";
+import PgBoss from "pg-boss";
 import { z } from "zod";
+import { KeywordSentinelAdapter } from "@zenith/adapters";
+import { purgeExpiredSessions } from "./purge.js";
+import { scoreMessage, type ScoreJob } from "./risk.js";
 
 const envSchema = z.object({
   DATABASE_URL: z
@@ -17,34 +19,20 @@ const envSchema = z.object({
 });
 
 const env = envSchema.parse(process.env);
-const pool = new Pool({ connectionString: env.DATABASE_URL, max: 3 });
+const pool = new Pool({ connectionString: env.DATABASE_URL, max: 5 });
 pool.on("error", () => {});
 
-async function purgeExpiredSessions(): Promise<number> {
-  // ON DELETE CASCADE removes session_messages and session_events with the row.
-  const { rowCount } = await pool.query(
-    `DELETE FROM sessions
-     WHERE status = 'ended'
-        OR last_active_at < now() - make_interval(mins => $1)`,
-    [env.SESSION_INACTIVITY_MINUTES],
-  );
-  const purged = rowCount ?? 0;
-  if (purged > 0) {
-    await pool.query(
-      `INSERT INTO system_audit_logs (actor, action, metadata)
-       VALUES ('worker', 'session_purge', $1)`,
-      [JSON.stringify({ purged })],
-    );
-  }
-  return purged;
-}
+const riskAdapters = [new KeywordSentinelAdapter()];
+
+const boss = new PgBoss({ connectionString: env.DATABASE_URL });
+boss.on("error", (err) => console.error(`[queue] ${err.message}`));
 
 let running = true;
 
-async function loop() {
+async function purgeLoop() {
   while (running) {
     try {
-      const purged = await purgeExpiredSessions();
+      const purged = await purgeExpiredSessions(pool, env.SESSION_INACTIVITY_MINUTES);
       if (purged > 0) console.log(`[purge] removed ${purged} session(s)`);
     } catch (err) {
       console.error(`[purge] failed: ${(err as Error).message}`);
@@ -53,15 +41,35 @@ async function loop() {
   }
 }
 
+async function main() {
+  await boss.start();
+  await boss.createQueue("score_message");
+  await boss.work<ScoreJob>("score_message", async (jobs) => {
+    for (const job of jobs) {
+      const outcome = await scoreMessage(pool, riskAdapters, job.data);
+      if (outcome?.alertEligible) {
+        // Counsellor alert dispatch arrives in Phase 5; the eligibility event
+        // is already persisted by scoreMessage.
+        console.log(`[risk] session alert-eligible at tier ${outcome.sessionTier}`);
+      }
+    }
+  });
+  console.log(
+    `[worker] purge every ${env.PURGE_INTERVAL_SECONDS}s (window ${env.SESSION_INACTIVITY_MINUTES}m); risk consumer online`,
+  );
+  await purgeLoop();
+}
+
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, async () => {
     running = false;
+    await boss.stop({ graceful: true }).catch(() => {});
     await pool.end();
     process.exit(0);
   });
 }
 
-console.log(
-  `[worker] purge loop started (every ${env.PURGE_INTERVAL_SECONDS}s, inactivity window ${env.SESSION_INACTIVITY_MINUTES}m)`,
-);
-loop();
+main().catch((err) => {
+  console.error(`[worker] fatal: ${err.message}`);
+  process.exit(1);
+});

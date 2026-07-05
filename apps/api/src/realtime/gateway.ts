@@ -16,8 +16,8 @@ import { register, unregister, broadcast } from "./registry.js";
 
 const AUTH_DEADLINE_MS = 5000;
 
-/** Phase 3+ plugs the AI Buddy pipeline in here; Phase 2 leaves it undefined. */
-export type UserMessageHook = (sessionId: string, content: string) => void;
+/** Post-persistence hook: AI Buddy pipeline (Phase 3) + risk enqueue (Phase 4). */
+export type UserMessageHook = (sessionId: string, content: string, messageId: string) => void;
 
 function send(socket: WebSocket, frame: WsServerFrame): void {
   if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(frame));
@@ -86,7 +86,7 @@ export function registerWsGateway(
             messageId: persisted.messageId,
             createdAt: persisted.createdAt,
           });
-          onUserMessage?.(sessionId, frame.content);
+          onUserMessage?.(sessionId, frame.content, persisted.messageId);
         } catch (err) {
           app.log.error({ err: { message: (err as Error).message } }, "ws message persist failed");
           send(socket, { type: "error", code: "INTERNAL_ERROR", message: "Could not save message" });
