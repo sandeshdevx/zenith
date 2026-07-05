@@ -13,20 +13,41 @@ Zenith is an anonymous support platform: an empathetic AI companion (open-source
 - **Multilingual by design.** All UI strings go through i18next with browser-language auto-detection; Whisper handles 90+ spoken languages; community translations welcome via `locales/` PRs.
 - **Anonymity as a system property.** UUID sessions, no accounts, no fingerprinting, auto-purge of all conversation data within 10 minutes of inactivity.
 
+## What works today
+
+- **Anonymous sessions** — UUID on load, signed token, no accounts, no PII
+  columns anywhere; all conversation data auto-purged within 10 minutes of
+  inactivity (enforced by the worker, verified by tests).
+- **AI Buddy** — streamed empathetic replies from any open model on Ollama
+  (Mistral 7B default), warm short answers in the user's language; when the
+  model is down the buddy offers humans, never silence.
+- **Voice** — browser-native speech input + spoken replies; mic denied →
+  silent text fallback.
+- **Invisible risk pipeline** — multilingual keyword sentinel (en/hi/Hinglish)
+  scores every message off the reply path; 2-of-3-turn confirmation before
+  any alert; risk never appears on any user-facing surface.
+- **Counsellor plane** — magic-link + TOTP login, availability, live alert
+  queue over WebSocket with the last 3 turns only, atomic accept (race-proof),
+  anonymous Jitsi room handoff framed as the buddy's own gentle offer.
+- **Fallbacks** — always-visible "Talk to a real person" (manual escape
+  hatch), inline free helplines, RED-tier 90-second no-counsellor fallback.
+
 ## Repository layout
 
 ```
-apps/api/            Fastify API + WebSocket gateway (running: health/ready)
-apps/worker/         Background jobs: risk scoring, purge, retries   (Phase 1+)
-apps/web/            Anonymous user PWA (React + Vite + i18next)     (Phase 3+)
-apps/dashboard/      Counsellor dashboard                            (Phase 5+)
-packages/contracts/  Shared zod schemas: REST DTOs + WS events
-packages/adapters/   Model/provider adapters (LLM, STT, TTS, risk…)  (Phase 3+)
-services/inference/  Python sidecar: whisper, TTS, risk model        (Phase 4+)
-infra/               docker-compose, migrations
+apps/api/            Fastify API + WS gateways; serves built frontends in prod
+apps/worker/         Purge job, risk scoring queue, alert expiry, RED fallback
+apps/web/            Anonymous user PWA (React + Vite + i18next, en/hi)
+apps/dashboard/      Counsellor dashboard (magic link + TOTP, live queue)
+packages/contracts/  Shared zod schemas: REST DTOs + WS frames
+packages/adapters/   LlmAdapter (Ollama), RiskAdapter (keyword sentinel)
+services/inference/  Optional self-host sidecar: whisper/Piper/risk model
+infra/               docker-compose, SQL migrations, db scripts
+docs/                PSTN bridge notes (disabled by default — legal/cost)
 ```
 
-See [ROADMAP.md](./ROADMAP.md) for the full phased implementation plan.
+See [ROADMAP.md](./ROADMAP.md) for the full plan and
+[DEPLOYMENT.md](./DEPLOYMENT.md) to run it in production.
 
 ## Quickstart (Windows, no Docker, no admin rights)
 

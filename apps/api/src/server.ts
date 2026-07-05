@@ -11,6 +11,7 @@ import { registerCounsellorRoutes } from "./routes/counsellor.js";
 import { registerWsGateway, type UserMessageHook } from "./realtime/gateway.js";
 import { registerCounsellorGateway } from "./realtime/counsellorGateway.js";
 import { startAlertDispatcher } from "./realtime/alertDispatcher.js";
+import { registerStaticSites } from "./staticSites.js";
 
 export interface ServerOptions {
   /** Phase 3+: AI Buddy pipeline invoked on each user message. */
@@ -42,12 +43,8 @@ export function buildServer(config: Config, options: ServerOptions = {}) {
     reply.code(err.statusCode ?? 500).send(body);
   });
 
-  app.setNotFoundHandler((_req, reply) => {
-    const body: ErrorEnvelope = {
-      error: { code: "NOT_FOUND", message: "Route not found" },
-    };
-    reply.code(404).send(body);
-  });
+  // 404 handling lives in registerStaticSites (SPA fallback in production,
+  // plain envelope in dev).
 
   app.register(fastifyCookie);
 
@@ -61,6 +58,7 @@ export function buildServer(config: Config, options: ServerOptions = {}) {
   registerSessionRoutes(app, config, pool, options.onUserMessage);
   registerSupportOptionsRoute(app, pool);
   registerCounsellorRoutes(app, config, pool);
+  registerStaticSites(app);
 
   app.register(async (instance) => {
     await instance.register(fastifyWebsocket);

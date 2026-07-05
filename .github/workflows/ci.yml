@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: zenith
+          POSTGRES_PASSWORD: zenith
+          POSTGRES_DB: zenith
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U zenith"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://zenith:zenith@localhost:5432/zenith
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run migrate
+      - run: npm run typecheck
+      # LLM-dependent tests self-skip when Ollama is absent; everything else
+      # runs against the live Postgres service.
+      - run: npm run test -w @zenith/api
+      - run: npm run test -w @zenith/worker
+      - run: npm run build -w @zenith/web
+      - run: npm run build -w @zenith/dashboard

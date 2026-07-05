@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.0",
+    "@fastify/static": "^9.1.3",
     "@fastify/websocket": "^11.0.0",
     "@zenith/adapters": "*",
     "@zenith/contracts": "*",
