@@ -1,5 +1,11 @@
 # Zenith V1 — Implementation Roadmap
 
+> **Status (2026-07-05):** Phases 0–7 and 9 are implemented, tested, and on
+> `main` (31 automated tests + CI). Phase 8 (PSTN bridge) intentionally ships
+> disabled — see `docs/pstn-bridge.md`. Remaining before public launch:
+> license decision, SMTP for magic links, PHQ-9 module (P1), load test at
+> target concurrency, and a labelled multilingual crisis eval set (risk R2).
+
 **Source:** Zenith PRD v1.0 + TRD v1 (Stability-First Implementation Plan)
 **Constraints honored:** free for every user · multilingual · open-source models only · the platform itself ships as open source
 **Architecture:** modular monolith — one API server, one worker process, one PostgreSQL database, adapters around every external model/provider.
