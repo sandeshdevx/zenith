@@ -63,12 +63,29 @@ export type WsEventName = z.infer<typeof wsEventNameSchema>;
 export const messageSenderSchema = z.enum(["user", "buddy", "counsellor"]);
 export type MessageSender = z.infer<typeof messageSenderSchema>;
 
+/**
+ * Numeric acoustic features extracted client-side from voice input.
+ * Raw audio never leaves the browser — only these measurements travel.
+ */
+export const prosodyFeaturesSchema = z.object({
+  f0Mean: z.number().finite(),
+  f0Std: z.number().finite().nonnegative(),
+  speechRate: z.number().finite().nonnegative(),
+  pauseRatio: z.number().min(0).max(1),
+  rmsEnergy: z.number().finite().nonnegative(),
+});
+export type ProsodyFeaturesDto = z.infer<typeof prosodyFeaturesSchema>;
+
 /** Client → server frames on the anonymous user socket. */
 export const wsClientFrameSchema = z.discriminatedUnion("type", [
   // Browsers cannot set headers on a WebSocket upgrade, so the first frame
   // authenticates the connection (5s deadline server-side).
   z.object({ type: z.literal("auth"), token: z.string() }),
-  z.object({ type: z.literal("message"), content: z.string().min(1).max(4000) }),
+  z.object({
+    type: z.literal("message"),
+    content: z.string().min(1).max(4000),
+    prosody: prosodyFeaturesSchema.optional(),
+  }),
   z.object({ type: z.literal("ping") }),
 ]);
 export type WsClientFrame = z.infer<typeof wsClientFrameSchema>;
@@ -124,6 +141,8 @@ export const alertPayloadSchema = z.object({
   lastTurns: z.array(
     z.object({ sender: messageSenderSchema, content: z.string() }),
   ),
+  /** Tier 4: the video room already created for this session. */
+  roomUrl: z.string().optional(),
 });
 export type AlertPayload = z.infer<typeof alertPayloadSchema>;
 

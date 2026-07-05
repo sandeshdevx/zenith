@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import type { Pool } from "pg";
 import { z } from "zod";
-import type { CreateSessionResponse, ErrorEnvelope } from "@zenith/contracts";
+import { prosodyFeaturesSchema, type CreateSessionResponse, type ErrorEnvelope } from "@zenith/contracts";
 import type { Config } from "../config.js";
 import { signSessionToken, verifySessionToken } from "../auth/sessionToken.js";
 import { recordSessionCreation } from "../rateLimit.js";
@@ -17,6 +17,7 @@ const createSessionBodySchema = z
 
 const postMessageBodySchema = z.object({
   content: z.string().min(1).max(4000),
+  prosody: prosodyFeaturesSchema.optional(),
 });
 
 function unauthorized(reply: FastifyReply): FastifyReply {
@@ -136,7 +137,7 @@ export function registerSessionRoutes(
         return reply.code(400).send(body);
       }
 
-      const persisted = await persistMessage(pool, sessionId, "user", parsed.data.content);
+      const persisted = await persistMessage(pool, sessionId, "user", parsed.data.content, parsed.data.prosody);
       if (!persisted) {
         const body: ErrorEnvelope = {
           error: { code: "SESSION_NOT_ACTIVE", message: "Session is not active" },

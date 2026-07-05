@@ -139,9 +139,17 @@ export function registerCounsellorRoutes(app: FastifyInstance, config: Config, p
       await pool.query("SELECT pg_notify('zenith_alert_claimed', $1)", [
         `${result.alertId}:${result.sessionId}`,
       ]);
-      // Phase 6: room for the counsellor now; buddy-framed offer to the user.
-      const roomUrl = newRoomUrl(config.JITSI_BASE_URL);
-      await offerHandoffToUser(pool, result.sessionId, roomUrl);
+      // Tier 4 alerts already carry a room (created by the worker with the
+      // user's prompt); otherwise create one now and deliver the offer.
+      const existing = await pool.query(
+        "SELECT handoff_room FROM sessions WHERE id = $1",
+        [result.sessionId],
+      );
+      let roomUrl: string = existing.rows[0]?.handoff_room ?? "";
+      if (!roomUrl) {
+        roomUrl = newRoomUrl(config.JITSI_BASE_URL);
+        await offerHandoffToUser(pool, result.sessionId, roomUrl);
+      }
       return { accepted: true, sessionId: result.sessionId, tier: result.tier, roomUrl };
     },
   );

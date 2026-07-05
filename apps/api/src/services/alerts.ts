@@ -16,6 +16,7 @@ export async function serializeAlert(pool: Pool, alertRow: {
   tier: "orange" | "red";
   created_at: Date;
   expires_at: Date;
+  handoff_room?: string | null;
 }): Promise<AlertPayload> {
   const turns = await pool.query(
     `SELECT sender, content FROM (
@@ -31,12 +32,15 @@ export async function serializeAlert(pool: Pool, alertRow: {
     createdAt: new Date(alertRow.created_at).toISOString(),
     expiresAt: new Date(alertRow.expires_at).toISOString(),
     lastTurns: turns.rows.map((r) => ({ sender: r.sender, content: r.content })),
+    ...(alertRow.handoff_room ? { roomUrl: alertRow.handoff_room } : {}),
   };
 }
 
 export async function getAlertById(pool: Pool, alertId: string): Promise<AlertPayload | null> {
   const { rows } = await pool.query(
-    "SELECT id, session_id, tier, created_at, expires_at FROM alerts WHERE id = $1 AND status = 'active'",
+    `SELECT a.id, a.session_id, a.tier, a.created_at, a.expires_at, s.handoff_room
+     FROM alerts a JOIN sessions s ON s.id = a.session_id
+     WHERE a.id = $1 AND a.status = 'active'`,
     [alertId],
   );
   return rows[0] ? serializeAlert(pool, rows[0]) : null;
@@ -44,7 +48,7 @@ export async function getAlertById(pool: Pool, alertId: string): Promise<AlertPa
 
 export async function listActiveAlerts(pool: Pool): Promise<AlertPayload[]> {
   const { rows } = await pool.query(
-    `SELECT a.id, a.session_id, a.tier, a.created_at, a.expires_at
+    `SELECT a.id, a.session_id, a.tier, a.created_at, a.expires_at, s.handoff_room
      FROM alerts a JOIN sessions s ON s.id = a.session_id
      WHERE a.status = 'active' AND a.expires_at > now()
      ORDER BY a.tier = 'red' DESC, a.created_at ASC`,

@@ -77,8 +77,16 @@ export function createBuddyService(
     const recent = await listRecentMessages(pool, sessionId, CONTEXT_TURNS);
     if (recent.length === 0) return;
 
+    // Tier 2 (patent claim 6): at yellow, passively weave resource references
+    // into the buddy's own voice — never a banner, never a hint of assessment.
+    const tierRow = await pool.query("SELECT risk_tier FROM sessions WHERE id = $1", [sessionId]);
+    const resourceNudge =
+      tierRow.rows[0]?.risk_tier === "yellow"
+        ? "\n\nIf it fits naturally in your reply (only if it fits), gently mention that free, kind people exist to talk to — there's a 'Talk to a real person' option right here whenever they want it. Offer it as your own caring thought, never as advice from a system, and never imply anything was detected."
+        : "";
+
     const messages: ChatMessage[] = [
-      { role: "system", content: SYSTEM_PROMPT },
+      { role: "system", content: SYSTEM_PROMPT + resourceNudge },
       ...recent.map<ChatMessage>((m) => ({
         role: m.sender === "user" ? "user" : "assistant",
         content: m.content,

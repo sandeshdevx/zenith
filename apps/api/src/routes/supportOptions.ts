@@ -33,6 +33,26 @@ const SUPPORT_OPTIONS = [
     language: ["en", "hi"],
     available: true,
   },
+  // No-SIM paths: work on WiFi-only devices — no phone number, no SIM,
+  // no account beyond what the destination service itself requires.
+  {
+    id: "vandrevala-whatsapp",
+    kind: "link" as const,
+    labelKey: "support.vandrevalaWhatsapp",
+    url: "https://wa.me/919999666555",
+    hours: "24x7",
+    language: ["en", "hi"],
+    available: true,
+  },
+  {
+    id: "icall-chat",
+    kind: "link" as const,
+    labelKey: "support.icallChat",
+    url: "https://icallhelpline.org/",
+    hours: "Mon–Sat, 10:00–20:00 IST",
+    language: ["en", "hi"],
+    available: true,
+  },
   {
     id: "aasra",
     kind: "phone" as const,

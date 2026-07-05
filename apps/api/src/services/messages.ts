@@ -4,7 +4,7 @@
  * reconnects re-fetches recent messages and loses nothing.
  */
 import type { Pool } from "pg";
-import type { MessageSender, SessionMessage } from "@zenith/contracts";
+import type { MessageSender, ProsodyFeaturesDto, SessionMessage } from "@zenith/contracts";
 
 export interface PersistedMessage {
   messageId: string;
@@ -17,6 +17,7 @@ export async function persistMessage(
   sessionId: string,
   sender: MessageSender,
   content: string,
+  prosody?: ProsodyFeaturesDto,
 ): Promise<PersistedMessage | null> {
   const { rows } = await pool.query(
     `UPDATE sessions SET last_active_at = now()
@@ -27,9 +28,9 @@ export async function persistMessage(
   if (rows.length === 0) return null;
 
   const inserted = await pool.query(
-    `INSERT INTO session_messages (session_id, sender, content)
-     VALUES ($1, $2, $3) RETURNING id, created_at`,
-    [sessionId, sender, content],
+    `INSERT INTO session_messages (session_id, sender, content, prosody)
+     VALUES ($1, $2, $3, $4) RETURNING id, created_at`,
+    [sessionId, sender, content, prosody ? JSON.stringify(prosody) : null],
   );
   return {
     messageId: String(inserted.rows[0].id),

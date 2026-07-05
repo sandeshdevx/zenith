@@ -3,7 +3,7 @@
  * The token lives in module memory only — closing the tab is leaving.
  * Nothing about the conversation ever touches localStorage/IndexedDB.
  */
-import type { SessionMessage, WsServerFrame } from "@zenith/contracts";
+import type { ProsodyFeaturesDto, SessionMessage, WsServerFrame } from "@zenith/contracts";
 
 export interface SupportOption {
   id: string;
@@ -137,9 +137,9 @@ export class RealtimeClient {
     };
   }
 
-  sendMessage(content: string): boolean {
+  sendMessage(content: string, prosody?: ProsodyFeaturesDto): boolean {
     if (this.ws?.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify({ type: "message", content }));
+      this.ws.send(JSON.stringify({ type: "message", content, prosody }));
       return true;
     }
     // REST fallback keeps the conversation alive even without a socket.
@@ -147,7 +147,7 @@ export class RealtimeClient {
       void fetch(`/api/v1/sessions/${sessionId}/messages`, {
         method: "POST",
         headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({ content, prosody }),
       });
       return true;
     }

@@ -23,9 +23,16 @@ Zenith is an anonymous support platform: an empathetic AI companion (open-source
   model is down the buddy offers humans, never silence.
 - **Voice** — browser-native speech input + spoken replies; mic denied →
   silent text fallback.
-- **Invisible risk pipeline** — multilingual keyword sentinel (en/hi/Hinglish)
-  scores every message off the reply path; 2-of-3-turn confirmation before
-  any alert; risk never appears on any user-facing surface.
+- **Multi-signal crisis detection (CSI)** — every turn is scored off the
+  reply path by three concurrent signals: NLP sentiment (multilingual
+  keyword sentinel + semantic distress similarity), an implicit PHQ-9/GAD-7
+  screening mapper (item embeddings, no questionnaire ever shown), and
+  speech prosody features extracted on-device (pitch variation, speech
+  rate, pauses, energy — raw audio never leaves the browser). A weighted
+  fusion engine with turn-dependent weights produces a Crisis Severity
+  Index driving four tiers: continue → passive resource injection →
+  silent counsellor alert → automatic anonymous video bridge. See
+  [docs/csi-architecture.md](./docs/csi-architecture.md).
 - **Counsellor plane** — magic-link + TOTP login, availability, live alert
   queue over WebSocket with the last 3 turns only, atomic accept (race-proof),
   anonymous Jitsi room handoff framed as the buddy's own gentle offer.

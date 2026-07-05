@@ -75,7 +75,7 @@ export function registerWsGateway(
 
       if (frame.type === "message") {
         try {
-          const persisted = await persistMessage(pool, sessionId, "user", frame.content);
+          const persisted = await persistMessage(pool, sessionId, "user", frame.content, frame.prosody);
           if (!persisted) {
             send(socket, { type: "error", code: "SESSION_NOT_ACTIVE", message: "Session is not active" });
             return;

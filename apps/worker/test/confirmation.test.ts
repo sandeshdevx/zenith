@@ -8,8 +8,18 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { Pool } from "pg";
-import { KeywordSentinelAdapter } from "@zenith/adapters";
+import { KeywordSentinelAdapter, type EmbeddingAdapter } from "@zenith/adapters";
+import { CsiEngine } from "../src/csi.js";
 import { scoreMessage } from "../src/risk.js";
+
+/** Embedder that is always offline — engine runs sentinel-only. */
+const offlineEmbedder: EmbeddingAdapter = {
+  name: "offline",
+  healthCheck: () => Promise.resolve(false),
+  embed: () => Promise.reject(new Error("offline")),
+};
+const engine = new CsiEngine(new KeywordSentinelAdapter(), offlineEmbedder);
+const JITSI = "https://meet.jit.si";
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL ?? "postgres://zenith:zenith@localhost:5432/zenith",
@@ -19,7 +29,6 @@ const pool = new Pool({
 pool.on("error", () => {});
 
 let dbAvailable = false;
-const adapters = [new KeywordSentinelAdapter()];
 
 before(async () => {
   try {
@@ -50,7 +59,7 @@ async function addUserMessage(sessionId: string, content: string): Promise<strin
 
 async function replay(sessionId: string, content: string) {
   const messageId = await addUserMessage(sessionId, content);
-  return scoreMessage(pool, adapters, { sessionId, messageId });
+  return scoreMessage(pool, engine, { sessionId, messageId }, JITSI);
 }
 
 test("single RED turn does not fire an alert; 2-of-3 does", async (t) => {
@@ -80,6 +89,16 @@ test("single RED turn does not fire an alert; 2-of-3 does", async (t) => {
   assert.equal(events.rowCount, 1);
   assert.equal(events.rows[0].payload.tier, "red");
 
+  // Tier 4 (claim 6): confirmed RED auto-creates the video room and delivers
+  // the buddy-framed prompt — before any counsellor accepts.
+  const session = await pool.query("SELECT handoff_room FROM sessions WHERE id = $1", [sessionId]);
+  assert.match(session.rows[0].handoff_room, /^https:\/\/meet\.jit\.si\/zenith-/);
+  const offer = await pool.query(
+    "SELECT 1 FROM session_messages WHERE session_id = $1 AND sender = 'buddy'",
+    [sessionId],
+  );
+  assert.equal(offer.rowCount, 1, "user prompt delivered with the room");
+
   await pool.query("DELETE FROM sessions WHERE id = $1", [sessionId]);
 });
 
@@ -107,7 +126,7 @@ test("scoring a purged message is a silent no-op", async (t) => {
   const messageId = await addUserMessage(sessionId, "I want to die");
   await pool.query("DELETE FROM sessions WHERE id = $1", [sessionId]); // purge cascades
 
-  const outcome = await scoreMessage(pool, adapters, { sessionId, messageId });
+  const outcome = await scoreMessage(pool, engine, { sessionId, messageId }, JITSI);
   assert.equal(outcome, null);
 });
 

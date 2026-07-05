@@ -12,6 +12,7 @@ import {
   type SupportOption,
 } from "./session.js";
 import { listen, speak, stopSpeaking, voiceInputSupported, type ListenSession } from "./voice.js";
+import { startProsodyCapture, type ProsodyCapture } from "./prosody.js";
 
 type Phase = "landing" | "chat" | "ended";
 type Status = "connecting" | "online" | "reconnecting" | "closed";
@@ -43,6 +44,7 @@ export default function App() {
   const [listening, setListening] = useState(false);
   const voiceRepliesRef = useRef(false);
   const listenRef = useRef<ListenSession | null>(null);
+  const prosodyRef = useRef<ProsodyCapture | null>(null);
   const clientRef = useRef<RealtimeClient | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
 
@@ -97,7 +99,11 @@ export default function App() {
     setMessages((m) => [...m, { key: nextKey(), sender: "user", content }]);
     setInput("");
     setThinking(true);
-    clientRef.current?.sendMessage(content);
+    // Prosody features (patent 301–302) extracted on-device travel with the
+    // spoken turn; raw audio never leaves the browser.
+    const prosody = prosodyRef.current?.stop() ?? undefined;
+    prosodyRef.current = null;
+    clientRef.current?.sendMessage(content, prosody ?? undefined);
   }, []);
 
   const toggleListening = useCallback(() => {
@@ -121,6 +127,9 @@ export default function App() {
     if (session) {
       listenRef.current = session;
       setListening(true);
+      void startProsodyCapture().then((capture) => {
+        prosodyRef.current = capture;
+      });
     } else {
       setVoiceAvailable(false);
     }

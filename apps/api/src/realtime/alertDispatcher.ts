@@ -24,6 +24,7 @@ export async function startAlertDispatcher(
       await client.query("LISTEN zenith_alert_claimed");
       await client.query("LISTEN zenith_alert_expired");
       await client.query("LISTEN zenith_user_message");
+      await client.query("LISTEN zenith_handoff_offer");
       client.on("notification", (msg) => void handle(msg.channel, msg.payload ?? ""));
       client.on("error", () => {
         client?.release();
@@ -49,6 +50,15 @@ export async function startAlertDispatcher(
         }
       } else if (channel === "zenith_alert_expired") {
         broadcastToCounsellors({ type: "alert.expired", alertId: payload });
+      } else if (channel === "zenith_handoff_offer") {
+        // Tier 4: the worker created the room — surface the buddy-framed
+        // join affordance on the user's open tabs.
+        const separator = payload.indexOf(":");
+        const sessionId = payload.slice(0, separator);
+        const roomUrl = payload.slice(separator + 1);
+        if (sessionId && roomUrl) {
+          broadcast(sessionId, { type: "handoff.offer", roomUrl });
+        }
       } else if (channel === "zenith_user_message") {
         // The worker persisted a buddy message (e.g. RED 90s fallback) —
         // deliver it to the user's open tabs.

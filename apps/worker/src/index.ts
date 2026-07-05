@@ -6,8 +6,9 @@
 import { Pool } from "pg";
 import PgBoss from "pg-boss";
 import { z } from "zod";
-import { KeywordSentinelAdapter } from "@zenith/adapters";
+import { KeywordSentinelAdapter, OllamaEmbeddingAdapter } from "@zenith/adapters";
 import { purgeExpiredSessions } from "./purge.js";
+import { CsiEngine } from "./csi.js";
 import {
   deliverRedFallback,
   expireStaleAlerts,
@@ -22,13 +23,21 @@ const envSchema = z.object({
     .default("postgres://zenith:zenith@localhost:5432/zenith"),
   PURGE_INTERVAL_SECONDS: z.coerce.number().default(60),
   SESSION_INACTIVITY_MINUTES: z.coerce.number().default(10),
+  OLLAMA_URL: z.string().default("http://localhost:11434"),
+  EMBED_MODEL: z.string().default("nomic-embed-text"),
+  JITSI_BASE_URL: z.string().default("https://meet.jit.si"),
 });
 
 const env = envSchema.parse(process.env);
 const pool = new Pool({ connectionString: env.DATABASE_URL, max: 5 });
 pool.on("error", () => {});
 
-const riskAdapters = [new KeywordSentinelAdapter()];
+const csiEngine = new CsiEngine(
+  new KeywordSentinelAdapter(),
+  // CPU-only hosts need patience: the one-time 19-text pre-encoding batch
+  // can take ~30s cold; per-message embeds are single texts and fast.
+  new OllamaEmbeddingAdapter({ baseUrl: env.OLLAMA_URL, model: env.EMBED_MODEL, timeoutMs: 180_000 }),
+);
 
 const boss = new PgBoss({ connectionString: env.DATABASE_URL });
 boss.on("error", (err) => console.error(`[queue] ${err.message}`));
@@ -54,9 +63,23 @@ async function main() {
   await boss.createQueue("score_message");
   await boss.createQueue("red_fallback");
 
+  // Pre-encode PHQ-9/GAD-7 items + distress prototypes (patent: at init).
+  // Degrades to sentinel-only scoring when the embedder is unavailable and
+  // retries every 60s until semantic scoring comes online.
+  const semantic = await csiEngine.initialize();
+  console.log(`[csi] semantic scoring ${semantic ? "online" : "offline — sentinel only"}`);
+  const semanticRetry = setInterval(() => {
+    if (!csiEngine.isSemanticReady()) {
+      void csiEngine.initialize().then((ok) => {
+        if (ok) console.log("[csi] semantic scoring online");
+      });
+    }
+  }, 60_000);
+  semanticRetry.unref?.();
+
   await boss.work<ScoreJob>("score_message", async (jobs) => {
     for (const job of jobs) {
-      const outcome = await scoreMessage(pool, riskAdapters, job.data);
+      const outcome = await scoreMessage(pool, csiEngine, job.data, env.JITSI_BASE_URL);
       if (outcome?.raisedAlertId) {
         console.log(`[risk] alert raised at tier ${outcome.sessionTier}`);
         if (outcome.sessionTier === "red") {
