@@ -17,6 +17,7 @@ const llm = new OllamaLlmAdapter({
   model: config.OLLAMA_MODEL,
   numPredict: config.LLM_NUM_PREDICT,
   timeoutMs: config.LLM_TIMEOUT_MS,
+  numGpu: config.OLLAMA_NUM_GPU,
 });
 const buddy = createBuddyService(getPool(config), llm, app.log);
 onUserMessage = buddy.onUserMessage;

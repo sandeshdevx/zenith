@@ -28,6 +28,8 @@ export interface OllamaAdapterConfig {
   /** Cap on generated tokens — buddy replies should be short and warm. */
   numPredict?: number;
   timeoutMs?: number;
+  /** GPU layers; set 0 to force CPU inference (e.g. broken CUDA drivers). */
+  numGpu?: number;
 }
 
 /** Ollama runtime (free, open source) — serves Mistral/Llama/Qwen/Gemma etc. */
@@ -63,7 +65,10 @@ export class OllamaLlmAdapter implements LlmAdapter {
         model: this.config.model,
         messages,
         stream: true,
-        options: { num_predict: this.config.numPredict ?? 200 },
+        options: {
+          num_predict: this.config.numPredict ?? 200,
+          ...(this.config.numGpu !== undefined ? { num_gpu: this.config.numGpu } : {}),
+        },
       }),
     });
     if (!res.ok || !res.body) {

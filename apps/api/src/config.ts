@@ -11,6 +11,8 @@ const envSchema = z.object({
   OLLAMA_MODEL: z.string().default("mistral:7b-instruct-q4_K_M"),
   LLM_NUM_PREDICT: z.coerce.number().default(200),
   LLM_TIMEOUT_MS: z.coerce.number().default(120000),
+  /** GPU layers for Ollama; 0 forces CPU (leave unset for auto). */
+  OLLAMA_NUM_GPU: z.coerce.number().optional(),
   SESSION_TOKEN_SECRET: z.string().min(16).default("dev-only-secret-change-me"),
   /** Set true behind HTTPS in production. */
   COOKIE_SECURE: z

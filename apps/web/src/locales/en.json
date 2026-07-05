@@ -1,0 +1,31 @@
+{
+  "landing": {
+    "title": "It's okay. You can talk here.",
+    "subtitle": "Free. Anonymous. Nothing you say is stored.",
+    "start": "Talk to someone",
+    "reassurance": "No name. No account. No sign-up. When you leave, everything is gone."
+  },
+  "chat": {
+    "placeholder": "Say anything…",
+    "send": "Send",
+    "connecting": "finding a quiet space…",
+    "reconnecting": "reconnecting…",
+    "listening": "…",
+    "endSession": "Leave quietly",
+    "endedNote": "This conversation is gone now. Nothing was kept. Come back anytime."
+  },
+  "support": {
+    "talkToPerson": "Talk to a real person",
+    "panelTitle": "Real people you can reach right now",
+    "panelNote": "All of these are free. None of them will know who you are unless you tell them.",
+    "call": "Call",
+    "open": "Open",
+    "hours": "Hours",
+    "close": "Not now",
+    "volunteer": "A volunteer listener (coming soon)",
+    "icall": "iCall — trained counsellors (TISS)",
+    "vandrevala": "Vandrevala Foundation helpline",
+    "aasra": "AASRA — 24x7 helpline",
+    "sevencups": "7 Cups — chat with a listener online"
+  }
+}
