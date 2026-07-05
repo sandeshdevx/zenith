@@ -1,12 +1,19 @@
 import Fastify, { type FastifyError } from "fastify";
 import fastifyCookie from "@fastify/cookie";
+import fastifyWebsocket from "@fastify/websocket";
 import type { ErrorEnvelope } from "@zenith/contracts";
 import type { Config } from "./config.js";
 import { getPool } from "./db/pool.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
+import { registerWsGateway, type UserMessageHook } from "./realtime/gateway.js";
 
-export function buildServer(config: Config) {
+export interface ServerOptions {
+  /** Phase 3+: AI Buddy pipeline invoked on each user message. */
+  onUserMessage?: UserMessageHook;
+}
+
+export function buildServer(config: Config, options: ServerOptions = {}) {
   const app = Fastify({
     logger: {
       level: "info",
@@ -48,6 +55,11 @@ export function buildServer(config: Config) {
 
   registerHealthRoutes(app, config, pool);
   registerSessionRoutes(app, config, pool);
+
+  app.register(async (instance) => {
+    await instance.register(fastifyWebsocket);
+    registerWsGateway(instance, config, pool, options.onUserMessage);
+  });
 
   return app;
 }

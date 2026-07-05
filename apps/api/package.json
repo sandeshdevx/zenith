@@ -12,14 +12,17 @@
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.0",
+    "@fastify/websocket": "^11.0.0",
     "@zenith/contracts": "*",
     "fastify": "^5.2.0",
     "pg": "^8.13.0",
+    "ws": "^8.18.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
     "@types/pg": "^8.11.0",
+    "@types/ws": "^8.18.1",
     "tsx": "^4.19.0",
     "typescript": "^5.7.0"
   }

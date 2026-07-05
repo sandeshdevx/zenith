@@ -6,6 +6,7 @@ import type { CreateSessionResponse, ErrorEnvelope } from "@zenith/contracts";
 import type { Config } from "../config.js";
 import { signSessionToken, verifySessionToken } from "../auth/sessionToken.js";
 import { recordSessionCreation } from "../rateLimit.js";
+import { persistMessage, listRecentMessages } from "../services/messages.js";
 
 const COOKIE_NAME = "zenith_session";
 
@@ -129,28 +130,26 @@ export function registerSessionRoutes(app: FastifyInstance, config: Config, pool
         return reply.code(400).send(body);
       }
 
-      const { rows } = await pool.query(
-        `UPDATE sessions SET last_active_at = now()
-         WHERE id = $1 AND status IN ('active','escalation_pending','handoff_active')
-         RETURNING id`,
-        [sessionId],
-      );
-      if (rows.length === 0) {
+      const persisted = await persistMessage(pool, sessionId, "user", parsed.data.content);
+      if (!persisted) {
         const body: ErrorEnvelope = {
           error: { code: "SESSION_NOT_ACTIVE", message: "Session is not active" },
         };
         return reply.code(409).send(body);
       }
+      return reply.code(201).send(persisted);
+    },
+  );
 
-      const inserted = await pool.query(
-        `INSERT INTO session_messages (session_id, sender, content)
-         VALUES ($1, 'user', $2) RETURNING id, created_at`,
-        [sessionId, parsed.data.content],
-      );
-      return reply.code(201).send({
-        messageId: String(inserted.rows[0].id),
-        createdAt: inserted.rows[0].created_at,
-      });
+  // Reconnect context: the client re-fetches recent messages after a socket
+  // drop. DB is the source of truth; the socket is transport only.
+  app.get<{ Params: { sessionId: string } }>(
+    "/api/v1/sessions/:sessionId/messages",
+    async (req, reply) => {
+      const { sessionId } = req.params;
+      if (!authorize(req, sessionId)) return unauthorized(reply);
+      const messages = await listRecentMessages(pool, sessionId);
+      return reply.send({ messages });
     },
   );
 
