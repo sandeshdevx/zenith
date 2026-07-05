@@ -25,7 +25,8 @@ cp .env.example .env    # set DATABASE_URL, SESSION_TOKEN_SECRET (long random!),
 npm run migrate
 
 # 2. Ollama (free, open source): install from ollama.com, then
-ollama pull mistral:7b-instruct-q4_K_M
+ollama pull mistral:7b-instruct-q4_K_M   # AI Buddy
+ollama pull bge-m3                        # multilingual crisis screening
 
 # 3. Build the frontends (the API will serve them automatically)
 npm run build -w @zenith/web

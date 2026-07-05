@@ -17,7 +17,7 @@ platform practises the claimed system.
 | **105** | Weighted Fusion Engine → **CSI** | `fusionWeights()` + `assess()` in `apps/worker/src/csi.ts` |
 | **106** | Tiered Response Engine | `csiToTier()` + `applyTieredResponse()` in `apps/worker/src/risk.ts` |
 | **107** | Anonymous Session Management | `apps/api/src/auth/sessionToken.ts`, `apps/api/src/routes/sessions.ts`, purge worker (`apps/worker/src/purge.ts`) |
-| **201** | Sentence Embedding Input | `OllamaEmbeddingAdapter.embed()` (`packages/adapters/src/embeddings.ts`) |
+| **201** | Sentence Embedding Input | `OllamaEmbeddingAdapter.embed()` (`packages/adapters/src/embeddings.ts`) — use `EMBED_MODEL=bge-m3` (100+ languages) so screening works cross-lingually against the English item descriptors; nomic-embed-text is English-only |
 | **202** | Semantic Similarity Computation | `cosineSimilarity()` against 16 pre-encoded PHQ-9/GAD-7 item vectors; threshold **0.55** (claimed range 0.40–0.55) |
 | **203** | Item Score Accumulator | `risk_screening` table (best score per item per session) + `compositeScreeningScore()`: S2 = PHQ-9ₙ×0.6 + GAD-7ₙ×0.4 |
 | **301** | Acoustic Feature Input | `AnalyserNode` frame capture in `apps/web/src/prosody.ts` |

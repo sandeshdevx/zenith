@@ -52,12 +52,28 @@ const DISTRESS_PROTOTYPES = [
   "I am deeply sad, everything feels dark and pointless",
 ];
 
-// Patent claim 5: similarity threshold in the range 0.40–0.55. We sit at the
-// precise end — nomic-embed similarity distributions are compressed, and the
-// looser end matches too many items per turn.
-const ITEM_SIMILARITY_THRESHOLD = 0.55;
-const DISTRESS_SIM_FLOOR = 0.35; // → 0
-const DISTRESS_SIM_CEIL = 0.65; // → 100
+/**
+ * Neutral calibration set: cosine scales differ between embedding models
+ * (bge-m3 runs ~0.1 hotter than nomic-embed-text, especially cross-lingually).
+ * At init we measure each item's similarity ceiling against these neutral
+ * sentences and place its operating threshold above that ceiling — never
+ * below the patent's claimed bound of 0.55 (claim 5 upper end).
+ */
+const NEUTRAL_CALIBRATION = [
+  "I went to the market today and bought some vegetables",
+  "the cricket match yesterday was great, our team won",
+  "आज मौसम अच्छा है और मैं बाहर घूमने गया",
+  "can you tell me what time the shop opens tomorrow",
+];
+
+const MIN_ITEM_THRESHOLD = 0.55; // patent claim 5: range 0.40–0.55, upper end
+const ITEM_MARGIN = 0.07; // required lift above the neutral ceiling
+const DISTRESS_MARGIN_FLOOR = 0.05;
+const DISTRESS_SPAN = 0.22; // floor → floor+span maps to 0 → 100
+// Semantic similarity alone (no explicit crisis wording) cannot push S1 into
+// the range reserved for stated intent — Tier 4 needs explicit language or
+// sustained multi-signal escalation, not one paraphrase-adjacent sentence.
+const SEMANTIC_S1_CAP = 80;
 
 // Sentinel tier → representative S1 contribution (0–100).
 const SENTINEL_S1: Record<RiskTier, number> = { green: 5, yellow: 40, orange: 65, red: 92 };
@@ -116,7 +132,9 @@ export interface CsiResult {
 
 export class CsiEngine {
   private itemVectors: Map<string, number[]> | null = null;
+  private itemThresholds: Map<string, number> = new Map();
   private distressVectors: number[][] = [];
+  private distressFloor = 0.4;
   private embedderReady = false;
 
   constructor(
@@ -124,16 +142,50 @@ export class CsiEngine {
     private readonly embedder: EmbeddingAdapter,
   ) {}
 
-  /** Pre-encode clinical items + distress prototypes (patent: at init). */
+  /**
+   * Pre-encode clinical items + distress prototypes (patent: at init) and
+   * self-calibrate thresholds against the neutral sentence set, so any
+   * embedding model (nomic, bge-m3, …) lands at an equivalent operating point.
+   */
   async initialize(): Promise<boolean> {
     try {
       if (!(await this.embedder.healthCheck())) return false;
-      const texts = [...CLINICAL_ITEMS.map((i) => i.text), ...DISTRESS_PROTOTYPES];
+      const texts = [
+        ...CLINICAL_ITEMS.map((i) => i.text),
+        ...DISTRESS_PROTOTYPES,
+        ...NEUTRAL_CALIBRATION,
+      ];
       const vectors = await this.embedder.embed(texts);
       this.itemVectors = new Map(
         CLINICAL_ITEMS.map((item, i) => [item.id, vectors[i] ?? []]),
       );
-      this.distressVectors = vectors.slice(CLINICAL_ITEMS.length);
+      this.distressVectors = vectors.slice(
+        CLINICAL_ITEMS.length,
+        CLINICAL_ITEMS.length + DISTRESS_PROTOTYPES.length,
+      );
+      const neutralVectors = vectors.slice(CLINICAL_ITEMS.length + DISTRESS_PROTOTYPES.length);
+
+      // Per-item threshold: above this item's neutral ceiling, never below
+      // the claimed 0.55 bound.
+      this.itemThresholds = new Map(
+        CLINICAL_ITEMS.map((item) => {
+          const vector = this.itemVectors!.get(item.id) ?? [];
+          const neutralCeiling = Math.max(
+            0,
+            ...neutralVectors.map((n) => cosineSimilarity(vector, n)),
+          );
+          return [item.id, Math.max(MIN_ITEM_THRESHOLD, neutralCeiling + ITEM_MARGIN)];
+        }),
+      );
+
+      const distressNeutralCeiling = Math.max(
+        0,
+        ...this.distressVectors.flatMap((d) =>
+          neutralVectors.map((n) => cosineSimilarity(d, n)),
+        ),
+      );
+      this.distressFloor = Math.max(0.35, distressNeutralCeiling + DISTRESS_MARGIN_FLOOR);
+
       this.embedderReady = true;
       return true;
     } catch {
@@ -168,7 +220,10 @@ export class CsiEngine {
       for (const proto of this.distressVectors) {
         best = Math.max(best, cosineSimilarity(turnVector, proto));
       }
-      const semantic = clamp01((best - DISTRESS_SIM_FLOOR) / (DISTRESS_SIM_CEIL - DISTRESS_SIM_FLOOR)) * 100;
+      const semantic = Math.min(
+        SEMANTIC_S1_CAP,
+        clamp01((best - this.distressFloor) / DISTRESS_SPAN) * 100,
+      );
       if (semantic > s1) {
         s1 = semantic;
         signals.push("semantic-distress");
@@ -180,8 +235,9 @@ export class CsiEngine {
     if (turnVector && this.itemVectors) {
       for (const item of CLINICAL_ITEMS) {
         const sim = cosineSimilarity(turnVector, this.itemVectors.get(item.id) ?? []);
-        if (sim >= ITEM_SIMILARITY_THRESHOLD) {
-          const itemScore = clamp01((sim - ITEM_SIMILARITY_THRESHOLD) / (1 - ITEM_SIMILARITY_THRESHOLD)) * 100;
+        const threshold = this.itemThresholds.get(item.id) ?? MIN_ITEM_THRESHOLD;
+        if (sim >= threshold) {
+          const itemScore = clamp01((sim - threshold) / (0.95 - threshold)) * 100;
           // Item Score Accumulator (203): keep the best match per item.
           await pool.query(
             `INSERT INTO risk_screening (session_id, item_id, score)
