@@ -87,15 +87,49 @@ async function applyEscalation(
   if (target !== currentTier) {
     await pool.query("UPDATE sessions SET risk_tier = $2 WHERE id = $1", [sessionId, target]);
     if (alertEligible) {
-      // Phase 5 dispatches counsellor alerts from this event. Payload carries
-      // tier only — no content, no PII.
       await pool.query(
         `INSERT INTO session_events (session_id, event_type, payload)
          VALUES ($1, 'risk_alert_eligible', $2)`,
         [sessionId, JSON.stringify({ tier: target })],
       );
+      await raiseAlert(pool, sessionId, target as "orange" | "red");
     }
   }
 
   return { tier: latest, sessionTier: target, alertEligible };
+}
+
+const ALERT_TTL_MINUTES = 10;
+
+/** Creates the counsellor alert (one active per session) and notifies APIs. */
+export async function raiseAlert(
+  pool: Pool,
+  sessionId: string,
+  tier: "orange" | "red",
+): Promise<string | null> {
+  const { rows } = await pool.query(
+    `INSERT INTO alerts (session_id, tier, expires_at)
+     VALUES ($1, $2, now() + make_interval(mins => $3))
+     ON CONFLICT (session_id) WHERE status = 'active' DO NOTHING
+     RETURNING id`,
+    [sessionId, tier, ALERT_TTL_MINUTES],
+  );
+  const alertId = rows[0] ? String(rows[0].id) : null;
+  if (alertId) {
+    await pool.query("SELECT pg_notify('zenith_alert_new', $1)", [alertId]);
+  }
+  return alertId;
+}
+
+/** Expires stale alerts (user vanished / nobody accepted) — PRD edge case. */
+export async function expireStaleAlerts(pool: Pool): Promise<number> {
+  const { rows } = await pool.query(
+    `UPDATE alerts SET status = 'expired'
+     WHERE status = 'active' AND expires_at <= now()
+     RETURNING id`,
+  );
+  for (const row of rows) {
+    await pool.query("SELECT pg_notify('zenith_alert_expired', $1)", [String(row.id)]);
+  }
+  return rows.length;
 }

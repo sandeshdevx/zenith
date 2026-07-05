@@ -108,6 +108,43 @@ export const sessionMessageSchema = z.object({
 export type SessionMessage = z.infer<typeof sessionMessageSchema>;
 
 // ---------------------------------------------------------------------------
+// Counsellor plane (Phase 5). Alert payloads are whitelist-serialized:
+// session UUID, tier, and the last three turns — never anything else.
+// ---------------------------------------------------------------------------
+
+export const alertPayloadSchema = z.object({
+  alertId: z.string(),
+  sessionId: z.string().uuid(),
+  tier: z.enum(["orange", "red"]),
+  createdAt: z.string(),
+  expiresAt: z.string(),
+  lastTurns: z.array(
+    z.object({ sender: messageSenderSchema, content: z.string() }),
+  ),
+});
+export type AlertPayload = z.infer<typeof alertPayloadSchema>;
+
+export const counsellorClientFrameSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("auth"), token: z.string() }),
+  z.object({ type: z.literal("ping") }),
+]);
+export type CounsellorClientFrame = z.infer<typeof counsellorClientFrameSchema>;
+
+export const counsellorServerFrameSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("auth.ok"), counsellorId: z.string().uuid() }),
+  z.object({ type: z.literal("auth.error"), reason: z.string() }),
+  z.object({ type: z.literal("counsellor.alerted"), alert: alertPayloadSchema }),
+  z.object({
+    type: z.literal("counsellor.accepted"),
+    alertId: z.string(),
+    sessionId: z.string().uuid(),
+  }),
+  z.object({ type: z.literal("alert.expired"), alertId: z.string() }),
+  z.object({ type: z.literal("pong") }),
+]);
+export type CounsellorServerFrame = z.infer<typeof counsellorServerFrameSchema>;
+
+// ---------------------------------------------------------------------------
 // Health / readiness
 // ---------------------------------------------------------------------------
 

@@ -8,7 +8,7 @@ import PgBoss from "pg-boss";
 import { z } from "zod";
 import { KeywordSentinelAdapter } from "@zenith/adapters";
 import { purgeExpiredSessions } from "./purge.js";
-import { scoreMessage, type ScoreJob } from "./risk.js";
+import { expireStaleAlerts, scoreMessage, type ScoreJob } from "./risk.js";
 
 const envSchema = z.object({
   DATABASE_URL: z
@@ -34,6 +34,8 @@ async function purgeLoop() {
     try {
       const purged = await purgeExpiredSessions(pool, env.SESSION_INACTIVITY_MINUTES);
       if (purged > 0) console.log(`[purge] removed ${purged} session(s)`);
+      const expired = await expireStaleAlerts(pool);
+      if (expired > 0) console.log(`[alerts] expired ${expired} stale alert(s)`);
     } catch (err) {
       console.error(`[purge] failed: ${(err as Error).message}`);
     }
