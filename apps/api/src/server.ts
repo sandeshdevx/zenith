@@ -6,6 +6,7 @@ import type { Config } from "./config.js";
 import { getPool } from "./db/pool.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
+import { registerSupportOptionsRoute } from "./routes/supportOptions.js";
 import { registerWsGateway, type UserMessageHook } from "./realtime/gateway.js";
 
 export interface ServerOptions {
@@ -54,7 +55,8 @@ export function buildServer(config: Config, options: ServerOptions = {}) {
   });
 
   registerHealthRoutes(app, config, pool);
-  registerSessionRoutes(app, config, pool);
+  registerSessionRoutes(app, config, pool, options.onUserMessage);
+  registerSupportOptionsRoute(app);
 
   app.register(async (instance) => {
     await instance.register(fastifyWebsocket);

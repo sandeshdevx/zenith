@@ -33,7 +33,12 @@ function extractToken(req: FastifyRequest): string | undefined {
   return undefined;
 }
 
-export function registerSessionRoutes(app: FastifyInstance, config: Config, pool: Pool) {
+export function registerSessionRoutes(
+  app: FastifyInstance,
+  config: Config,
+  pool: Pool,
+  onUserMessage?: (sessionId: string, content: string) => void,
+) {
   /** Auth guard: token must be valid AND bound to the session in the URL. */
   function authorize(req: FastifyRequest, sessionId: string): boolean {
     const token = extractToken(req);
@@ -137,6 +142,7 @@ export function registerSessionRoutes(app: FastifyInstance, config: Config, pool
         };
         return reply.code(409).send(body);
       }
+      onUserMessage?.(sessionId, parsed.data.content);
       return reply.code(201).send(persisted);
     },
   );
