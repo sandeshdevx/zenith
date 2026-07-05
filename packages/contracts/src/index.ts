@@ -93,6 +93,9 @@ export const wsServerFrameSchema = z.discriminatedUnion("type", [
   }),
   // Streaming fragment of an in-progress buddy reply.
   z.object({ type: z.literal("message.delta"), content: z.string() }),
+  // A human is available. Always framed by the UI as the buddy's own gentle
+  // suggestion (PRD Flow B) — never a system alert or warning.
+  z.object({ type: z.literal("handoff.offer"), roomUrl: z.string() }),
   z.object({ type: z.literal("session.ended") }),
   z.object({ type: z.literal("pong") }),
   z.object({ type: z.literal("error"), code: z.string(), message: z.string() }),

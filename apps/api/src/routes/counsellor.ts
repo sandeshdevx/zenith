@@ -11,6 +11,7 @@ import {
 import { generateTotpSecret, totpUri, verifyTotp } from "../auth/totp.js";
 import { requestMagicLink, verifyMagicLink } from "../services/counsellorAuth.js";
 import { acceptAlert, declineAlert, listActiveAlerts } from "../services/alerts.js";
+import { newRoomUrl, offerHandoffToUser } from "../services/handoff.js";
 
 const COOKIE_NAME = "zenith_counsellor";
 
@@ -138,7 +139,10 @@ export function registerCounsellorRoutes(app: FastifyInstance, config: Config, p
       await pool.query("SELECT pg_notify('zenith_alert_claimed', $1)", [
         `${result.alertId}:${result.sessionId}`,
       ]);
-      return { accepted: true, sessionId: result.sessionId, tier: result.tier };
+      // Phase 6: room for the counsellor now; buddy-framed offer to the user.
+      const roomUrl = newRoomUrl(config.JITSI_BASE_URL);
+      await offerHandoffToUser(pool, result.sessionId, roomUrl);
+      return { accepted: true, sessionId: result.sessionId, tier: result.tier, roomUrl };
     },
   );
 

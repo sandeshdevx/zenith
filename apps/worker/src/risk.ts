@@ -19,6 +19,8 @@ export interface ScoreOutcome {
   tier: RiskTier;
   sessionTier: RiskTier;
   alertEligible: boolean;
+  /** Set when a new alert row was created by this scoring pass. */
+  raisedAlertId?: string;
 }
 
 export async function scoreMessage(
@@ -84,6 +86,7 @@ async function applyEscalation(
     target = "yellow";
   }
 
+  let raisedAlertId: string | undefined;
   if (target !== currentTier) {
     await pool.query("UPDATE sessions SET risk_tier = $2 WHERE id = $1", [sessionId, target]);
     if (alertEligible) {
@@ -92,11 +95,51 @@ async function applyEscalation(
          VALUES ($1, 'risk_alert_eligible', $2)`,
         [sessionId, JSON.stringify({ tier: target })],
       );
-      await raiseAlert(pool, sessionId, target as "orange" | "red");
+      raisedAlertId = (await raiseAlert(pool, sessionId, target as "orange" | "red")) ?? undefined;
     }
   }
 
-  return { tier: latest, sessionTier: target, alertEligible };
+  return { tier: latest, sessionTier: target, alertEligible, raisedAlertId };
+}
+
+// PRD Flow B step 6: RED tier with no counsellor accepting within 90 seconds —
+// the buddy quietly surfaces real numbers inline. A suggestion, never a banner.
+const RED_FALLBACK_TEXT =
+  "If you feel like talking to a real person right now, iCall has kind, trained counsellors at +91-9152987821 — it's free and they won't ask who you are. There's also 7cups.com/talk-to-someone-now if typing feels easier. I'm right here with you either way.";
+
+export const RED_FALLBACK_DELAY_SECONDS = 90;
+
+/**
+ * Runs 90s after a RED alert: if nobody accepted it, deliver the helpline
+ * fallback in the buddy's voice. The API broadcasts it to the user's tabs
+ * via the zenith_user_message channel.
+ */
+export async function deliverRedFallback(pool: Pool, alertId: string): Promise<boolean> {
+  const { rows } = await pool.query(
+    "SELECT session_id FROM alerts WHERE id = $1 AND status = 'active'",
+    [alertId],
+  );
+  const sessionId: string | undefined = rows[0]?.session_id;
+  if (!sessionId) return false; // accepted or expired — a human got there first
+
+  const inserted = await pool.query(
+    `INSERT INTO session_messages (session_id, sender, content)
+     SELECT $1, 'buddy', $2
+     WHERE EXISTS (SELECT 1 FROM sessions WHERE id = $1 AND status IN ('active','escalation_pending'))
+     RETURNING id`,
+    [sessionId, RED_FALLBACK_TEXT],
+  );
+  if (!inserted.rows[0]) return false;
+
+  await pool.query("SELECT pg_notify('zenith_user_message', $1)", [
+    `${sessionId}:${inserted.rows[0].id}`,
+  ]);
+  await pool.query(
+    `INSERT INTO session_events (session_id, event_type, payload)
+     VALUES ($1, 'red_fallback_delivered', '{}')`,
+    [sessionId],
+  );
+  return true;
 }
 
 const ALERT_TTL_MINUTES = 10;

@@ -7,6 +7,7 @@ import type { Config } from "../config.js";
 import { signSessionToken, verifySessionToken } from "../auth/sessionToken.js";
 import { recordSessionCreation } from "../rateLimit.js";
 import { persistMessage, listRecentMessages } from "../services/messages.js";
+import { acceptHandoff, declineHandoff, escalateByUser } from "../services/handoff.js";
 
 const COOKIE_NAME = "zenith_session";
 
@@ -156,6 +157,43 @@ export function registerSessionRoutes(
       if (!authorize(req, sessionId)) return unauthorized(reply);
       const messages = await listRecentMessages(pool, sessionId);
       return reply.send({ messages });
+    },
+  );
+
+  // Manual escape hatch (PRD Flow C): the user asks for a human directly.
+  app.post<{ Params: { sessionId: string } }>(
+    "/api/v1/sessions/:sessionId/escalate",
+    async (req, reply) => {
+      const { sessionId } = req.params;
+      if (!authorize(req, sessionId)) return unauthorized(reply);
+      const raised = await escalateByUser(pool, sessionId);
+      return reply.send({ requested: true, alreadyPending: !raised });
+    },
+  );
+
+  app.post<{ Params: { sessionId: string } }>(
+    "/api/v1/sessions/:sessionId/handoff/accept",
+    async (req, reply) => {
+      const { sessionId } = req.params;
+      if (!authorize(req, sessionId)) return unauthorized(reply);
+      const roomUrl = await acceptHandoff(pool, sessionId);
+      if (!roomUrl) {
+        const body: ErrorEnvelope = {
+          error: { code: "NO_HANDOFF", message: "No handoff is available" },
+        };
+        return reply.code(409).send(body);
+      }
+      return { roomUrl };
+    },
+  );
+
+  app.post<{ Params: { sessionId: string } }>(
+    "/api/v1/sessions/:sessionId/handoff/decline",
+    async (req, reply) => {
+      const { sessionId } = req.params;
+      if (!authorize(req, sessionId)) return unauthorized(reply);
+      await declineHandoff(pool, sessionId);
+      return { declined: true };
     },
   );
 

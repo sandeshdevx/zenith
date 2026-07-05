@@ -8,7 +8,13 @@ import PgBoss from "pg-boss";
 import { z } from "zod";
 import { KeywordSentinelAdapter } from "@zenith/adapters";
 import { purgeExpiredSessions } from "./purge.js";
-import { expireStaleAlerts, scoreMessage, type ScoreJob } from "./risk.js";
+import {
+  deliverRedFallback,
+  expireStaleAlerts,
+  scoreMessage,
+  RED_FALLBACK_DELAY_SECONDS,
+  type ScoreJob,
+} from "./risk.js";
 
 const envSchema = z.object({
   DATABASE_URL: z
@@ -46,14 +52,28 @@ async function purgeLoop() {
 async function main() {
   await boss.start();
   await boss.createQueue("score_message");
+  await boss.createQueue("red_fallback");
+
   await boss.work<ScoreJob>("score_message", async (jobs) => {
     for (const job of jobs) {
       const outcome = await scoreMessage(pool, riskAdapters, job.data);
-      if (outcome?.alertEligible) {
-        // Counsellor alert dispatch arrives in Phase 5; the eligibility event
-        // is already persisted by scoreMessage.
-        console.log(`[risk] session alert-eligible at tier ${outcome.sessionTier}`);
+      if (outcome?.raisedAlertId) {
+        console.log(`[risk] alert raised at tier ${outcome.sessionTier}`);
+        if (outcome.sessionTier === "red") {
+          await boss.send(
+            "red_fallback",
+            { alertId: outcome.raisedAlertId },
+            { startAfter: RED_FALLBACK_DELAY_SECONDS },
+          );
+        }
       }
+    }
+  });
+
+  await boss.work<{ alertId: string }>("red_fallback", async (jobs) => {
+    for (const job of jobs) {
+      const delivered = await deliverRedFallback(pool, job.data.alertId);
+      if (delivered) console.log("[risk] red fallback delivered (no counsellor in 90s)");
     }
   });
   console.log(

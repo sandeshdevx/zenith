@@ -1,4 +1,5 @@
 import type { FastifyInstance } from "fastify";
+import type { Pool } from "pg";
 
 /**
  * Human support registry (PRD Flow C + fallback helplines).
@@ -11,7 +12,7 @@ const SUPPORT_OPTIONS = [
     id: "volunteer",
     kind: "video" as const,
     labelKey: "support.volunteer",
-    // Becomes true in Phase 5/6 when counsellor routing is live.
+    // Availability resolved live from counsellor presence at request time.
     available: false,
   },
   {
@@ -51,6 +52,18 @@ const SUPPORT_OPTIONS = [
   },
 ];
 
-export function registerSupportOptionsRoute(app: FastifyInstance) {
-  app.get("/api/v1/support-options", async () => ({ options: SUPPORT_OPTIONS }));
+export function registerSupportOptionsRoute(app: FastifyInstance, pool: Pool) {
+  app.get("/api/v1/support-options", async () => {
+    const { rows } = await pool.query(
+      `SELECT 1 FROM counsellor_availability
+       WHERE is_available AND last_seen_at > now() - interval '2 minutes'
+       LIMIT 1`,
+    );
+    const volunteerOnline = rows.length > 0;
+    return {
+      options: SUPPORT_OPTIONS.map((o) =>
+        o.id === "volunteer" ? { ...o, available: volunteerOnline } : o,
+      ),
+    };
+  });
 }

@@ -13,6 +13,8 @@ const envSchema = z.object({
   LLM_TIMEOUT_MS: z.coerce.number().default(120000),
   /** GPU layers for Ollama; 0 forces CPU (leave unset for auto). */
   OLLAMA_NUM_GPU: z.coerce.number().optional(),
+  /** Jitsi instance for anonymous video handoff (self-hosters: your own). */
+  JITSI_BASE_URL: z.string().default("https://meet.jit.si"),
   SESSION_TOKEN_SECRET: z.string().min(16).default("dev-only-secret-change-me"),
   /** Set true behind HTTPS in production. */
   COOKIE_SECURE: z

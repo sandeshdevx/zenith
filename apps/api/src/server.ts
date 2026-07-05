@@ -59,7 +59,7 @@ export function buildServer(config: Config, options: ServerOptions = {}) {
 
   registerHealthRoutes(app, config, pool);
   registerSessionRoutes(app, config, pool, options.onUserMessage);
-  registerSupportOptionsRoute(app);
+  registerSupportOptionsRoute(app, pool);
   registerCounsellorRoutes(app, config, pool);
 
   app.register(async (instance) => {
