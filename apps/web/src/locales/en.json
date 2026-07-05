@@ -11,6 +11,8 @@
     "connecting": "finding a quiet space…",
     "reconnecting": "reconnecting…",
     "listening": "…",
+    "listeningMic": "listening — just speak",
+    "mic": "Speak instead of typing",
     "endSession": "Leave quietly",
     "endedNote": "This conversation is gone now. Nothing was kept. Come back anytime."
   },

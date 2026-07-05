@@ -11,6 +11,7 @@ import {
   RealtimeClient,
   type SupportOption,
 } from "./session.js";
+import { listen, speak, stopSpeaking, voiceInputSupported, type ListenSession } from "./voice.js";
 
 type Phase = "landing" | "chat" | "ended";
 type Status = "connecting" | "online" | "reconnecting" | "closed";
@@ -25,7 +26,7 @@ let keyCounter = 0;
 const nextKey = () => `m${++keyCounter}`;
 
 export default function App() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [phase, setPhase] = useState<Phase>("landing");
   const [status, setStatus] = useState<Status>("connecting");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -37,6 +38,11 @@ export default function App() {
   const [handoffOffer, setHandoffOffer] = useState<string | null>(null);
   const [videoRoom, setVideoRoom] = useState<string | null>(null);
   const [waitingForHuman, setWaitingForHuman] = useState(false);
+  // Voice: silently unavailable when unsupported or mic denied (PRD).
+  const [voiceAvailable, setVoiceAvailable] = useState(() => voiceInputSupported());
+  const [listening, setListening] = useState(false);
+  const voiceRepliesRef = useRef(false);
+  const listenRef = useRef<ListenSession | null>(null);
   const clientRef = useRef<RealtimeClient | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
 
@@ -51,6 +57,10 @@ export default function App() {
         ...m,
         { key: nextKey(), sender: frame.sender, content: frame.content },
       ]);
+      // Voice replies mirror the user's chosen mode (PRD: voice or text).
+      if (frame.sender !== "user" && voiceRepliesRef.current) {
+        speak(frame.content, navigator.language);
+      }
     } else if (frame.type === "handoff.offer") {
       setHandoffOffer(frame.roomUrl);
       setWaitingForHuman(false);
@@ -82,6 +92,39 @@ export default function App() {
     setThinking(true);
     clientRef.current?.sendMessage(content);
   }, [input]);
+
+  const sendVoice = useCallback((content: string) => {
+    setMessages((m) => [...m, { key: nextKey(), sender: "user", content }]);
+    setInput("");
+    setThinking(true);
+    clientRef.current?.sendMessage(content);
+  }, []);
+
+  const toggleListening = useCallback(() => {
+    if (listening) {
+      listenRef.current?.stop();
+      return;
+    }
+    stopSpeaking();
+    const session = listen(i18n.language || navigator.language, {
+      onInterim: (text) => setInput(text),
+      onFinal: (text) => {
+        voiceRepliesRef.current = true; // spoke → gets spoken replies
+        sendVoice(text);
+      },
+      onDenied: () => {
+        // PRD: silent fallback to text. No error message shown.
+        setVoiceAvailable(false);
+      },
+      onEnd: () => setListening(false),
+    });
+    if (session) {
+      listenRef.current = session;
+      setListening(true);
+    } else {
+      setVoiceAvailable(false);
+    }
+  }, [listening, i18n.language, sendVoice]);
 
   const leave = useCallback(async () => {
     clientRef.current?.stop();
@@ -198,7 +241,7 @@ export default function App() {
           <textarea
             rows={1}
             value={input}
-            placeholder={t("chat.placeholder")}
+            placeholder={listening ? t("chat.listeningMic") : t("chat.placeholder")}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {
@@ -207,6 +250,15 @@ export default function App() {
               }
             }}
           />
+          {voiceAvailable && (
+            <button
+              className={`mic ${listening ? "mic-live" : ""}`}
+              aria-label={t("chat.mic")}
+              onClick={toggleListening}
+            >
+              ●
+            </button>
+          )}
           <button className="send" disabled={!input.trim()} onClick={send}>
             {t("chat.send")}
           </button>
