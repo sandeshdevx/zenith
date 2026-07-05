@@ -1,0 +1,19 @@
+import { loadConfig } from "./config.js";
+import { buildServer } from "./server.js";
+
+const config = loadConfig();
+const app = buildServer(config);
+
+app
+  .listen({ port: config.PORT, host: config.HOST })
+  .catch((err) => {
+    app.log.error(err);
+    process.exit(1);
+  });
+
+for (const signal of ["SIGINT", "SIGTERM"] as const) {
+  process.on(signal, async () => {
+    await app.close();
+    process.exit(0);
+  });
+}

@@ -1,0 +1,33 @@
+# Zenith local infrastructure — everything here is free and open source.
+# Usage: docker compose -f infra/docker-compose.yml up -d
+# (No Docker? See README "Running without Docker".)
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: zenith
+      POSTGRES_PASSWORD: zenith
+      POSTGRES_DB: zenith
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zenith"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama:/root/.ollama
+    # After first start, pull the AI Buddy model (open weights, Apache-2.0):
+    #   docker compose -f infra/docker-compose.yml exec ollama ollama pull mistral:7b-instruct-q4_K_M
+
+volumes:
+  pgdata:
+  ollama:

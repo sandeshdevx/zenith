@@ -1,0 +1,23 @@
+{
+  "name": "zenith",
+  "private": true,
+  "description": "Zenith — free, anonymous, open-source AI mental health support platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev -w @zenith/api",
+    "dev:worker": "npm run dev -w @zenith/worker",
+    "migrate": "npm run migrate -w @zenith/api",
+    "db:init": "powershell -ExecutionPolicy Bypass -File infra/scripts/db.ps1 init",
+    "db:start": "powershell -ExecutionPolicy Bypass -File infra/scripts/db.ps1 start",
+    "db:stop": "powershell -ExecutionPolicy Bypass -File infra/scripts/db.ps1 stop",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
