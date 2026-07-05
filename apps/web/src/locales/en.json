@@ -14,6 +14,12 @@
     "endSession": "Leave quietly",
     "endedNote": "This conversation is gone now. Nothing was kept. Come back anytime."
   },
+  "handoff": {
+    "accept": "Okay — connect me",
+    "decline": "Not right now",
+    "finding": "finding someone for you…",
+    "backToChat": "Back to chat"
+  },
   "support": {
     "talkToPerson": "Talk to a real person",
     "panelTitle": "Real people you can reach right now",
@@ -22,7 +28,8 @@
     "open": "Open",
     "hours": "Hours",
     "close": "Not now",
-    "volunteer": "A volunteer listener (coming soon)",
+    "connect": "Connect",
+    "volunteer": "A volunteer listener — online now",
     "icall": "iCall — trained counsellors (TISS)",
     "vandrevala": "Vandrevala Foundation helpline",
     "aasra": "AASRA — 24x7 helpline",

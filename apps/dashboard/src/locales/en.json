@@ -1,0 +1,26 @@
+{
+  "login": {
+    "tagline": "Counsellor dashboard — anonymous sessions, real help.",
+    "email": "you@organisation.org",
+    "sendLink": "Send me a sign-in link",
+    "tokenHint": "A sign-in token was issued. Paste it here (your operator relays it until email delivery is configured).",
+    "token": "Sign-in token",
+    "totp": "6-digit authenticator code",
+    "signIn": "Sign in",
+    "totpNeeded": "Enter your authenticator code to finish signing in.",
+    "invalid": "That link is invalid or expired. Request a new one."
+  },
+  "queue": {
+    "title": "Session queue",
+    "available": "Available for sessions",
+    "unavailable": "Not available",
+    "empty": "No one is waiting right now.",
+    "them": "them",
+    "buddy": "buddy",
+    "accept": "Accept — join video",
+    "decline": "Pass",
+    "inSession": "In session",
+    "rejoin": "Rejoin room",
+    "done": "Done"
+  }
+}

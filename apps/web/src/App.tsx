@@ -2,8 +2,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { SessionMessage, WsServerFrame } from "@zenith/contracts";
 import {
+  acceptHandoff,
   createSession,
+  declineHandoff,
   endSession,
+  escalate,
   fetchSupportOptions,
   RealtimeClient,
   type SupportOption,
@@ -31,6 +34,9 @@ export default function App() {
   const [input, setInput] = useState("");
   const [supportOpen, setSupportOpen] = useState(false);
   const [supportOptions, setSupportOptions] = useState<SupportOption[]>([]);
+  const [handoffOffer, setHandoffOffer] = useState<string | null>(null);
+  const [videoRoom, setVideoRoom] = useState<string | null>(null);
+  const [waitingForHuman, setWaitingForHuman] = useState(false);
   const clientRef = useRef<RealtimeClient | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
 
@@ -45,6 +51,9 @@ export default function App() {
         ...m,
         { key: nextKey(), sender: frame.sender, content: frame.content },
       ]);
+    } else if (frame.type === "handoff.offer") {
+      setHandoffOffer(frame.roomUrl);
+      setWaitingForHuman(false);
     } else if (frame.type === "session.ended") {
       setPhase("ended");
     }
@@ -153,6 +162,36 @@ export default function App() {
               {t("chat.listening")}
             </span>
           )}
+          {waitingForHuman && !handoffOffer && (
+            <span className="thinking">
+              <span className="breath" aria-hidden />
+              {t("handoff.finding")}
+            </span>
+          )}
+          {handoffOffer && (
+            <div className="handoff-offer">
+              <button
+                className="handoff-yes"
+                onClick={() => {
+                  void acceptHandoff().then((room) => {
+                    if (room) setVideoRoom(room);
+                    setHandoffOffer(null);
+                  });
+                }}
+              >
+                {t("handoff.accept")}
+              </button>
+              <button
+                className="handoff-no"
+                onClick={() => {
+                  setHandoffOffer(null);
+                  void declineHandoff();
+                }}
+              >
+                {t("handoff.decline")}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="composer">
@@ -180,7 +219,27 @@ export default function App() {
         />
       </div>
       {supportOpen && (
-        <SupportPanel options={supportOptions} onClose={() => setSupportOpen(false)} />
+        <SupportPanel
+          options={supportOptions}
+          onClose={() => setSupportOpen(false)}
+          onVolunteer={() => {
+            setSupportOpen(false);
+            setWaitingForHuman(true);
+            void escalate();
+          }}
+        />
+      )}
+      {videoRoom && (
+        <div className="video-veil">
+          <div className="video-bar">
+            <button onClick={() => setVideoRoom(null)}>{t("handoff.backToChat")}</button>
+          </div>
+          <iframe
+            src={videoRoom}
+            allow="camera; microphone; fullscreen; display-capture"
+            title="zenith-call"
+          />
+        </div>
       )}
     </div>
   );
@@ -196,7 +255,15 @@ function HumanDoor({ onOpen }: { onOpen: () => void }) {
   );
 }
 
-function SupportPanel({ options, onClose }: { options: SupportOption[]; onClose: () => void }) {
+function SupportPanel({
+  options,
+  onClose,
+  onVolunteer,
+}: {
+  options: SupportOption[];
+  onClose: () => void;
+  onVolunteer?: () => void;
+}) {
   const { t } = useTranslation();
   return (
     <div className="support-veil" onClick={onClose}>
@@ -221,6 +288,17 @@ function SupportPanel({ options, onClose }: { options: SupportOption[]; onClose:
               {o.kind === "link" && o.url && (
                 <a href={o.url} target="_blank" rel="noreferrer">
                   {t("support.open")}
+                </a>
+              )}
+              {o.kind === "video" && onVolunteer && (
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    onVolunteer();
+                  }}
+                >
+                  {t("support.connect")}
                 </a>
               )}
             </div>

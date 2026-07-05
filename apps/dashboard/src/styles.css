@@ -1,0 +1,207 @@
+/* Zenith counsellor dashboard — utilitarian night-shift tool.
+   Graphite workbench, tier colors carry the urgency, nothing decorative. */
+
+:root {
+  --bg: #101418;
+  --panel: #171c22;
+  --line: #262d36;
+  --text: #dde3ea;
+  --dim: #8b95a3;
+  --faint: #57616e;
+  --teal: #4fb3a5;
+  --orange: #e0954f;
+  --red: #e06d5c;
+  --sans: "Karla", "Segoe UI", sans-serif;
+  --serif: "Spectral", Georgia, serif;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 18px 40px;
+}
+
+/* ---------- login ---------- */
+
+.login {
+  max-width: 380px;
+  margin: 14vh auto 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.login h1 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 2rem;
+  margin: 0;
+  color: var(--teal);
+}
+
+.login .tag { color: var(--dim); margin: 0 0 10px; }
+.login .hint { color: var(--faint); font-size: 0.85rem; margin: 0; }
+.login .error { color: var(--red); font-size: 0.9rem; }
+
+.login input {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-size: 1rem;
+  padding: 11px 14px;
+  outline: none;
+}
+
+.login input:focus { border-color: var(--teal); }
+
+.login button {
+  background: var(--teal);
+  color: #0b201c;
+  border: none;
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 1rem;
+  padding: 12px;
+  cursor: pointer;
+}
+
+.login button:disabled { opacity: 0.4; cursor: default; }
+
+/* ---------- bar ---------- */
+
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px 0 14px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 18px;
+}
+
+.brand { font-family: var(--serif); font-size: 1.1rem; color: var(--dim); }
+
+.avail {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--dim);
+  cursor: pointer;
+  user-select: none;
+}
+
+.avail input { accent-color: var(--teal); width: 18px; height: 18px; }
+
+/* ---------- active calls ---------- */
+
+.calls { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+
+.call {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: rgba(79, 179, 165, 0.08);
+  border: 1px solid rgba(79, 179, 165, 0.3);
+  border-radius: 10px;
+  padding: 10px 14px;
+}
+
+.call a { color: var(--teal); font-weight: 700; text-decoration: none; }
+.call button {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+}
+
+/* ---------- queue ---------- */
+
+.queue { display: flex; flex-direction: column; gap: 14px; }
+
+.empty { color: var(--faint); text-align: center; padding: 60px 0; }
+
+.alert {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-left-width: 4px;
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.alert.tier-orange { border-left-color: var(--orange); }
+.alert.tier-red { border-left-color: var(--red); }
+
+.alert-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.tier { font-weight: 700; letter-spacing: 0.08em; font-size: 0.8rem; }
+.tier-orange .tier { color: var(--orange); }
+.tier-red .tier { color: var(--red); }
+.sid { color: var(--faint); font-size: 0.8rem; }
+.countdown { margin-left: auto; color: var(--dim); font-variant-numeric: tabular-nums; }
+
+.turns {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  padding: 10px 0;
+  margin-bottom: 12px;
+}
+
+.turn { margin: 0; font-size: 0.95rem; }
+.turn span {
+  display: inline-block;
+  min-width: 52px;
+  color: var(--faint);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.turn-user { color: var(--text); }
+.turn-buddy, .turn-counsellor { color: var(--dim); }
+
+.actions { display: flex; gap: 10px; }
+
+.accept {
+  background: var(--teal);
+  color: #0b201c;
+  border: none;
+  border-radius: 8px;
+  font-weight: 700;
+  font-size: 0.95rem;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+.decline {
+  background: none;
+  border: 1px solid var(--line);
+  color: var(--dim);
+  border-radius: 8px;
+  font-size: 0.95rem;
+  padding: 10px 18px;
+  cursor: pointer;
+}

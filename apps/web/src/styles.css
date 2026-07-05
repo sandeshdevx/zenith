@@ -374,6 +374,68 @@ body::before {
   cursor: pointer;
 }
 
+/* ---------------- handoff ---------------- */
+
+/* quiet inline choice — belongs to the buddy's message, not a system modal */
+.handoff-offer {
+  display: flex;
+  gap: 10px;
+  animation: rise 0.5s ease both;
+}
+
+.handoff-yes {
+  background: linear-gradient(160deg, var(--amber), var(--amber-deep));
+  color: var(--night);
+  border: none;
+  border-radius: 999px;
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 10px 22px;
+  cursor: pointer;
+}
+
+.handoff-no {
+  background: none;
+  border: 1px solid rgba(199, 203, 224, 0.18);
+  color: var(--ink-dim);
+  border-radius: 999px;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  padding: 10px 20px;
+  cursor: pointer;
+}
+
+.video-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 30;
+  background: var(--night);
+  display: flex;
+  flex-direction: column;
+}
+
+.video-bar {
+  padding: 10px 14px;
+}
+
+.video-bar button {
+  background: none;
+  border: 1px solid rgba(199, 203, 224, 0.2);
+  color: var(--ink-dim);
+  border-radius: 999px;
+  font-family: var(--sans);
+  font-size: 0.9rem;
+  padding: 8px 18px;
+  cursor: pointer;
+}
+
+.video-veil iframe {
+  flex: 1;
+  border: none;
+  width: 100%;
+}
+
 /* ---------------- ended ---------------- */
 
 .ended {

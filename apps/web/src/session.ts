@@ -55,6 +55,33 @@ export async function fetchSupportOptions(): Promise<SupportOption[]> {
   return body.options;
 }
 
+/** Ask for a human directly (manual escape hatch). */
+export async function escalate(): Promise<void> {
+  if (!token || !sessionId) return;
+  await fetch(`/api/v1/sessions/${sessionId}/escalate`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  }).catch(() => {});
+}
+
+export async function acceptHandoff(): Promise<string | null> {
+  if (!token || !sessionId) return null;
+  const res = await fetch(`/api/v1/sessions/${sessionId}/handoff/accept`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) return null;
+  return ((await res.json()) as { roomUrl: string }).roomUrl;
+}
+
+export async function declineHandoff(): Promise<void> {
+  if (!token || !sessionId) return;
+  await fetch(`/api/v1/sessions/${sessionId}/handoff/decline`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${token}` },
+  }).catch(() => {});
+}
+
 export async function endSession(): Promise<void> {
   if (!token || !sessionId) return;
   await fetch(`/api/v1/sessions/${sessionId}/end`, {
