@@ -3,8 +3,9 @@ export type {
   ChatStreamOptions,
   LlmAdapter,
   OllamaAdapterConfig,
+  OpenAICompatConfig,
 } from "./llm.js";
-export { OllamaLlmAdapter } from "./llm.js";
+export { OllamaLlmAdapter, OpenAICompatLlmAdapter } from "./llm.js";
 
 export type { RiskAdapter, RiskAssessment, RiskTier } from "./risk.js";
 export { KeywordSentinelAdapter, RISK_TIER_RANK } from "./risk.js";

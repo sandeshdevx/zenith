@@ -1,5 +1,5 @@
 import PgBoss from "pg-boss";
-import { OllamaLlmAdapter } from "@zenith/adapters";
+import { OllamaLlmAdapter, OpenAICompatLlmAdapter, type LlmAdapter } from "@zenith/adapters";
 import { loadConfig } from "./config.js";
 import { getPool } from "./db/pool.js";
 import { createBuddyService } from "./services/buddy.js";
@@ -30,13 +30,25 @@ void boss
     app.log.error({ err: { message: err.message } }, "risk queue unavailable"),
   );
 
-const llm = new OllamaLlmAdapter({
-  baseUrl: config.OLLAMA_URL,
-  model: config.OLLAMA_MODEL,
-  numPredict: config.LLM_NUM_PREDICT,
-  timeoutMs: config.LLM_TIMEOUT_MS,
-  numGpu: config.OLLAMA_NUM_GPU,
-});
+let llm: LlmAdapter;
+if (config.LLM_PROVIDER === "openai-compat" && config.LLM_API_BASE_URL && config.LLM_API_MODEL) {
+  llm = new OpenAICompatLlmAdapter({
+    baseUrl: config.LLM_API_BASE_URL,
+    apiKey: config.LLM_API_KEY,
+    model: config.LLM_API_MODEL,
+    maxTokens: config.LLM_NUM_PREDICT,
+    timeoutMs: config.LLM_TIMEOUT_MS,
+  });
+} else {
+  llm = new OllamaLlmAdapter({
+    baseUrl: config.OLLAMA_URL,
+    model: config.OLLAMA_MODEL,
+    numPredict: config.LLM_NUM_PREDICT,
+    timeoutMs: config.LLM_TIMEOUT_MS,
+    numGpu: config.OLLAMA_NUM_GPU,
+  });
+}
+app.log.info(`AI Buddy provider: ${llm.name}`);
 const buddy = createBuddyService(getPool(config), llm, app.log);
 onUserMessage = (sessionId, content, messageId) => {
   buddy.onUserMessage(sessionId, content);
