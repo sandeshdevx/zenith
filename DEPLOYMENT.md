@@ -25,8 +25,11 @@ cp .env.example .env    # set DATABASE_URL, SESSION_TOKEN_SECRET (long random!),
 npm run migrate
 
 # 2. Ollama (free, open source): install from ollama.com, then
-ollama pull mistral:7b-instruct-q4_K_M   # AI Buddy
+ollama pull llama3.2:3b                   # AI Buddy — best CPU speed/quality/Hindi
 ollama pull bge-m3                        # multilingual crisis screening
+# alternatives: mistral:7b-instruct-q4_K_M (better English, 2x slower, replies
+# to Hindi in English), or any OpenAI-compatible API via LLM_PROVIDER
+# (see .env.example) when you have no local compute at all
 
 # 3. Build the frontends (the API will serve them automatically)
 npm run build -w @zenith/web
