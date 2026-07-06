@@ -45,15 +45,20 @@ export interface ListenSession {
 }
 
 /**
- * One listening turn. onFinal fires with the finished utterance;
- * onDenied fires on permission problems (caller falls back to text,
- * silently). onInterim streams the in-progress transcript.
+ * One listening turn.
+ * - onInterim streams everything heard so far into the composer.
+ * - onFinal fires when the utterance finished cleanly → auto-send.
+ * - onPartial fires when listening ended without a clean final result but
+ *   something WAS heard → the text stays in the composer for manual send,
+ *   never silently dropped.
+ * - onDenied fires on permission problems (silent fallback to text, PRD).
  */
 export function listen(
   lang: string,
   handlers: {
     onInterim: (text: string) => void;
     onFinal: (text: string) => void;
+    onPartial: (text: string) => void;
     onDenied: () => void;
     onEnd: () => void;
   },
@@ -66,6 +71,9 @@ export function listen(
   recognition.interimResults = true;
 
   let finalText = "";
+  let lastHeard = "";
+  let denied = false;
+
   recognition.onresult = (event) => {
     let interim = "";
     for (let i = event.resultIndex; i < event.results.length; i++) {
@@ -74,15 +82,24 @@ export function listen(
       if (result.isFinal) finalText += result[0].transcript;
       else interim += result[0].transcript;
     }
-    if (interim) handlers.onInterim(finalText + interim);
+    lastHeard = `${finalText}${interim}`.trim();
+    // Always reflect what has been heard — including finalized-only chunks.
+    if (lastHeard) handlers.onInterim(lastHeard);
   };
   recognition.onerror = (event) => {
     if (event.error === "not-allowed" || event.error === "service-not-allowed") {
+      denied = true;
       handlers.onDenied();
     }
+    // 'no-speech', 'network', 'aborted' fall through to onend, which
+    // preserves anything that was heard instead of dropping it.
   };
   recognition.onend = () => {
-    if (finalText.trim()) handlers.onFinal(finalText.trim());
+    if (!denied) {
+      const finished = finalText.trim();
+      if (finished) handlers.onFinal(finished);
+      else if (lastHeard) handlers.onPartial(lastHeard);
+    }
     handlers.onEnd();
   };
   recognition.start();

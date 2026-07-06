@@ -118,6 +118,9 @@ export default function App() {
         voiceRepliesRef.current = true; // spoke → gets spoken replies
         sendVoice(text);
       },
+      // Listening ended without a clean final result — keep whatever was
+      // heard in the composer so the user can edit or press Send.
+      onPartial: (text) => setInput(text),
       onDenied: () => {
         // PRD: silent fallback to text. No error message shown.
         setVoiceAvailable(false);
