@@ -41,6 +41,9 @@ export default function App() {
   const [waitingForHuman, setWaitingForHuman] = useState(false);
   // Voice: silently unavailable when unsupported or mic denied (PRD).
   const [voiceAvailable, setVoiceAvailable] = useState(() => voiceInputSupported());
+  const [voiceUnsupported] = useState(() => !voiceInputSupported());
+  const [voiceLang, setVoiceLang] = useState("auto");
+  const [connectFailed, setConnectFailed] = useState(false);
   const [listening, setListening] = useState(false);
   const voiceRepliesRef = useRef(false);
   const listenRef = useRef<ListenSession | null>(null);
@@ -79,7 +82,23 @@ export default function App() {
 
   const begin = useCallback(async () => {
     setPhase("chat");
-    await createSession();
+    setConnectFailed(false);
+    // The backend must never silently fail for someone reaching out:
+    // retry, then degrade to an explicit offline card with real helplines.
+    let connected = false;
+    for (let attempt = 0; attempt < 3 && !connected; attempt++) {
+      try {
+        await createSession();
+        connected = true;
+      } catch {
+        await new Promise((r) => setTimeout(r, 1200 * (attempt + 1)));
+      }
+    }
+    if (!connected) {
+      setConnectFailed(true);
+      setStatus("closed");
+      return;
+    }
     const client = new RealtimeClient({ onFrame, onStatus: setStatus, onResync });
     clientRef.current = client;
     client.connect();
@@ -112,7 +131,8 @@ export default function App() {
       return;
     }
     stopSpeaking();
-    const session = listen(i18n.language || navigator.language, {
+    const lang = voiceLang === "auto" ? i18n.language || navigator.language : voiceLang;
+    const session = listen(lang, {
       onInterim: (text) => setInput(text),
       onFinal: (text) => {
         voiceRepliesRef.current = true; // spoke → gets spoken replies
@@ -136,7 +156,7 @@ export default function App() {
     } else {
       setVoiceAvailable(false);
     }
-  }, [listening, i18n.language, sendVoice]);
+  }, [listening, i18n.language, voiceLang, sendVoice]);
 
   const leave = useCallback(async () => {
     clientRef.current?.stop();
@@ -160,6 +180,20 @@ export default function App() {
           <button className="begin" onClick={() => void begin()}>
             {t("landing.start")}
           </button>
+          <div className="pillars">
+            <div className="pillar">
+              <h3>{t("landing.pillar1Title")}</h3>
+              <p>{t("landing.pillar1Text")}</p>
+            </div>
+            <div className="pillar">
+              <h3>{t("landing.pillar2Title")}</h3>
+              <p>{t("landing.pillar2Text")}</p>
+            </div>
+            <div className="pillar">
+              <h3>{t("landing.pillar3Title")}</h3>
+              <p>{t("landing.pillar3Text")}</p>
+            </div>
+          </div>
           <p className="reassure">{t("landing.reassurance")}</p>
         </main>
         <HumanDoor
@@ -168,6 +202,12 @@ export default function App() {
             setSupportOpen(true);
           }}
         />
+        <footer className="land-links">
+          <a href="/counsellor/">{t("landing.counsellorLink")}</a>
+          <a href="https://github.com/sandeshdevx/zenith" target="_blank" rel="noreferrer">
+            {t("landing.github")}
+          </a>
+        </footer>
         {supportOpen && (
           <SupportPanel options={supportOptions} onClose={() => setSupportOpen(false)} />
         )}
@@ -198,6 +238,24 @@ export default function App() {
           </button>
         </div>
 
+        {connectFailed && (
+          <div className="offline-card">
+            <p>{t("chat.offline")}</p>
+            <div className="offline-lines">
+              <a href="tel:+919152987821">iCall · +91 91529 87821</a>
+              <a href="tel:+919999666555">Vandrevala 24x7 · +91 99996 66555</a>
+              <a href="https://wa.me/919999666555" target="_blank" rel="noreferrer">
+                Vandrevala WhatsApp
+              </a>
+              <a href="https://www.7cups.com/talk-to-someone-now/" target="_blank" rel="noreferrer">
+                7 Cups
+              </a>
+            </div>
+            <button className="retry" onClick={() => void begin()}>
+              {t("chat.retry")}
+            </button>
+          </div>
+        )}
         <div className="stream" ref={streamRef}>
           {messages.map((m) =>
             m.sender === "user" ? (
@@ -271,9 +329,27 @@ export default function App() {
               ●
             </button>
           )}
-          <button className="send" disabled={!input.trim()} onClick={send}>
+          <button className="send" disabled={!input.trim() || connectFailed} onClick={send}>
             {t("chat.send")}
           </button>
+        </div>
+        <div className="composer-hints">
+          {voiceAvailable && (
+            <label className="voice-lang">
+              {t("chat.voiceLang")}
+              <select value={voiceLang} onChange={(e) => setVoiceLang(e.target.value)}>
+                <option value="auto">{t("chat.voiceLangAuto")}</option>
+                <option value="en-IN">English</option>
+                <option value="hi-IN">हिन्दी</option>
+                <option value="ta-IN">தமிழ்</option>
+                <option value="te-IN">తెలుగు</option>
+                <option value="bn-IN">বাংলা</option>
+                <option value="mr-IN">मराठी</option>
+                <option value="kn-IN">ಕನ್ನಡ</option>
+              </select>
+            </label>
+          )}
+          {voiceUnsupported && <span className="voice-hint">{t("chat.voiceUnsupported")}</span>}
         </div>
 
         <HumanDoor

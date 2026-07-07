@@ -3,7 +3,15 @@
     "title": "It's okay. You can talk here.",
     "subtitle": "Free. Anonymous. Nothing you say is stored.",
     "start": "Talk to someone",
-    "reassurance": "No name. No account. No sign-up. When you leave, everything is gone."
+    "reassurance": "No name. No account. No sign-up. When you leave, everything is gone.",
+    "pillar1Title": "A friend who listens",
+    "pillar1Text": "Voice or text, in your language. Warm, patient, there at 2 AM.",
+    "pillar2Title": "Real people, any hour",
+    "pillar2Text": "Free helplines and volunteer listeners — call, WhatsApp or chat, even without a SIM.",
+    "pillar3Title": "Nothing is stored",
+    "pillar3Text": "No account, no number, no trace. Everything disappears minutes after you leave.",
+    "counsellorLink": "For volunteers — counsellor dashboard",
+    "github": "Open source on GitHub"
   },
   "chat": {
     "placeholder": "Say anything…",
@@ -14,7 +22,12 @@
     "listeningMic": "listening — just speak",
     "mic": "Speak instead of typing",
     "endSession": "Leave quietly",
-    "endedNote": "This conversation is gone now. Nothing was kept. Come back anytime."
+    "endedNote": "This conversation is gone now. Nothing was kept. Come back anytime.",
+    "offline": "We can't reach Zenith right now — but you don't have to wait. These real people can help immediately:",
+    "retry": "Try again",
+    "voiceLang": "Voice",
+    "voiceLangAuto": "Auto",
+    "voiceUnsupported": "Voice input works in Chrome and Edge — typing works everywhere."
   },
   "handoff": {
     "accept": "Okay — connect me",

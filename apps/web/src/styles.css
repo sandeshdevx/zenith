@@ -91,6 +91,55 @@ body::before {
   max-width: 44ch;
 }
 
+.pillars {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  margin-top: 30px;
+}
+
+.pillar {
+  background: rgba(199, 203, 224, 0.04);
+  border: 1px solid rgba(199, 203, 224, 0.09);
+  border-radius: 14px;
+  padding: 14px 16px;
+  animation: rise 0.9s ease both;
+}
+
+.pillar h3 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.02rem;
+  color: var(--moon);
+  margin: 0 0 6px;
+}
+
+.pillar p {
+  color: var(--ink-dim);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  margin: 0;
+}
+
+.land-links {
+  display: flex;
+  justify-content: center;
+  gap: 26px;
+  padding: 14px 0 20px;
+}
+
+.land-links a {
+  color: var(--ink-faint);
+  font-size: 0.82rem;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--ink-faint);
+  transition: color 0.2s ease;
+}
+
+.land-links a:hover {
+  color: var(--amber);
+}
+
 .begin {
   margin-top: 14px;
   align-self: flex-start;
@@ -395,6 +444,77 @@ body::before {
   font-size: 0.95rem;
   padding: 11px;
   cursor: pointer;
+}
+
+/* ---------------- offline & hints ---------------- */
+
+.offline-card {
+  background: rgba(217, 138, 126, 0.08);
+  border: 1px solid rgba(217, 138, 126, 0.25);
+  border-radius: 14px;
+  padding: 16px 18px;
+  margin-top: 16px;
+  animation: rise 0.5s ease both;
+}
+
+.offline-card p {
+  color: var(--ink);
+  margin: 0 0 12px;
+}
+
+.offline-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.offline-lines a {
+  color: var(--amber);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.retry {
+  background: none;
+  border: 1px solid rgba(199, 203, 224, 0.25);
+  color: var(--ink-dim);
+  border-radius: 999px;
+  font-family: var(--sans);
+  padding: 9px 22px;
+  cursor: pointer;
+}
+
+.composer-hints {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 2px 0;
+  min-height: 20px;
+}
+
+.voice-lang {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+}
+
+.voice-lang select {
+  background: var(--night-soft);
+  color: var(--ink-dim);
+  border: 1px solid rgba(199, 203, 224, 0.12);
+  border-radius: 8px;
+  font-family: var(--sans);
+  font-size: 0.8rem;
+  padding: 4px 8px;
+}
+
+.voice-hint {
+  color: var(--ink-faint);
+  font-size: 0.78rem;
 }
 
 /* ---------------- handoff ---------------- */
