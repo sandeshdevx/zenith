@@ -27,7 +27,14 @@
     "retry": "Try again",
     "voiceLang": "Voice",
     "voiceLangAuto": "Auto",
-    "voiceUnsupported": "Voice input works in Chrome and Edge — typing works everywhere."
+    "voiceUnsupported": "This browser has no microphone access — typing works everywhere."
+  },
+  "voiceMode": {
+    "start": "Voice conversation",
+    "listening": "listening — just speak",
+    "thinking": "thinking…",
+    "speaking": "speaking…",
+    "end": "End voice conversation"
   },
   "handoff": {
     "accept": "Okay — connect me",

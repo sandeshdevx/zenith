@@ -1,18 +1,28 @@
-# services/inference (self-host upgrade path)
+# services/inference — Whisper STT sidecar
 
-The zero-cost default voice stack is browser-native (WebSpeech recognition +
-speechSynthesis output) and needs nothing from the server. This sidecar is
-the optional upgrade for self-hosters who want consistent, private,
-server-side speech and a trained risk model:
+Server-side speech recognition via
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) (MIT): 90+
+languages on CPU, so voice input works in **every** browser (Firefox and
+others without a native speech engine record audio with MediaRecorder and
+POST it here through the API's authenticated `/api/v1/stt` proxy). Audio is
+processed in memory and never written to disk.
 
-- **STT:** [faster-whisper](https://github.com/SYSTRAN/faster-whisper) (MIT) —
-  90+ languages, runs on CPU; endpoint `POST /stt` with audio chunks.
-- **TTS:** [Piper](https://github.com/rhasspy/piper) (MIT) — fast local
-  voices incl. Indic languages; endpoint `POST /tts`.
+## Setup
+
+```bash
+cd services/inference
+python -m venv .venv
+.venv/Scripts/pip install -r requirements.txt   # (bin/pip on Linux)
+.venv/Scripts/python stt_server.py              # port 8090; WHISPER_MODEL=small default
+```
+
+First start downloads the model (~460 MB for `small`). `base` is 3x faster
+and lighter with reduced accuracy; `medium` is better but slow on CPU.
+
+## Still planned (contributions welcome)
+
+- **TTS:** [Piper](https://github.com/rhasspy/piper) (MIT) — server voices
+  incl. Indic languages; the browser's speechSynthesis is the current default.
 - **Risk model:** fine-tuned MuRIL/IndicBERT classifier behind the same
-  `RiskAdapter` shape as the keyword sentinel (see `packages/adapters`).
-
-Planned shape: a small Python FastAPI app, wired through `SttAdapter` /
-`TtsAdapter` / `RiskAdapter` so the API and worker never know which engine
-is running. Contributions welcome — especially labelled multilingual crisis
-evaluation data (see ROADMAP risk R2).
+  `RiskAdapter` shape as the keyword sentinel — blocked on labelled
+  multilingual crisis evaluation data (ROADMAP risk R2).

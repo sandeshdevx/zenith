@@ -8,6 +8,7 @@ import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
 import { registerSupportOptionsRoute } from "./routes/supportOptions.js";
 import { registerCounsellorRoutes } from "./routes/counsellor.js";
+import { registerSttRoute } from "./routes/stt.js";
 import { registerWsGateway, type UserMessageHook } from "./realtime/gateway.js";
 import { registerCounsellorGateway } from "./realtime/counsellorGateway.js";
 import { startAlertDispatcher } from "./realtime/alertDispatcher.js";
@@ -58,6 +59,7 @@ export function buildServer(config: Config, options: ServerOptions = {}) {
   registerSessionRoutes(app, config, pool, options.onUserMessage);
   registerSupportOptionsRoute(app, pool);
   registerCounsellorRoutes(app, config, pool);
+  registerSttRoute(app, config);
   registerStaticSites(app);
 
   app.register(async (instance) => {

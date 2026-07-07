@@ -446,6 +446,100 @@ body::before {
   cursor: pointer;
 }
 
+/* ---------------- hands-free voice mode ---------------- */
+
+.voice-mode-btn {
+  background: none;
+  border: 1px solid rgba(232, 178, 106, 0.4);
+  color: var(--amber);
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  font-size: 1.3rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.25s ease;
+}
+
+.voice-mode-btn:hover {
+  background: rgba(232, 178, 106, 0.14);
+}
+
+.voice-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  background:
+    radial-gradient(700px 700px at 50% 38%, rgba(232, 178, 106, 0.08), transparent 60%),
+    var(--night);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  padding: 24px;
+}
+
+.voice-orb {
+  width: 130px;
+  height: 130px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 34%, rgba(232, 178, 106, 0.9), rgba(185, 127, 53, 0.55) 65%, rgba(185, 127, 53, 0.25));
+  box-shadow: 0 0 80px -10px rgba(232, 178, 106, 0.45);
+}
+
+.orb-listening {
+  animation: breathe 4s ease-in-out infinite;
+}
+
+.orb-thinking {
+  animation: orbSpin 1.6s ease-in-out infinite;
+  opacity: 0.75;
+}
+
+.orb-speaking {
+  animation: orbTalk 0.85s ease-in-out infinite;
+}
+
+@keyframes orbSpin {
+  0%, 100% { transform: scale(0.9); filter: hue-rotate(0deg); }
+  50% { transform: scale(0.8); filter: hue-rotate(-25deg); }
+}
+
+@keyframes orbTalk {
+  0%, 100% { transform: scale(1); }
+  30% { transform: scale(1.08); }
+  60% { transform: scale(0.96); }
+}
+
+.voice-phase {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 1.15rem;
+  color: var(--ink-dim);
+  margin: 0;
+}
+
+.voice-last {
+  color: var(--ink-faint);
+  font-size: 0.95rem;
+  max-width: 46ch;
+  text-align: center;
+  min-height: 3em;
+  margin: 0;
+}
+
+.voice-end {
+  background: none;
+  border: 1px solid rgba(199, 203, 224, 0.25);
+  color: var(--ink-dim);
+  border-radius: 999px;
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  padding: 11px 26px;
+  cursor: pointer;
+}
+
 /* ---------------- offline & hints ---------------- */
 
 .offline-card {

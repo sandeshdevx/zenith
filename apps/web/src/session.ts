@@ -55,6 +55,25 @@ export async function fetchSupportOptions(): Promise<SupportOption[]> {
   return body.options;
 }
 
+/** Server-side Whisper transcription (works in every browser). */
+export async function transcribe(
+  audio: Blob,
+  lang?: string,
+): Promise<{ text: string; language: string } | null> {
+  if (!token) return null;
+  const query = lang && lang !== "auto" ? `?lang=${encodeURIComponent(lang)}` : "";
+  const res = await fetch(`/api/v1/stt${query}`, {
+    method: "POST",
+    headers: {
+      "content-type": audio.type || "application/octet-stream",
+      authorization: `Bearer ${token}`,
+    },
+    body: audio,
+  }).catch(() => null);
+  if (!res?.ok) return null;
+  return (await res.json()) as { text: string; language: string };
+}
+
 /** Ask for a human directly (manual escape hatch). */
 export async function escalate(): Promise<void> {
   if (!token || !sessionId) return;

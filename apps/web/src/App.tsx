@@ -8,14 +8,17 @@ import {
   endSession,
   escalate,
   fetchSupportOptions,
+  transcribe,
   RealtimeClient,
   type SupportOption,
 } from "./session.js";
 import { listen, speak, stopSpeaking, voiceInputSupported, type ListenSession } from "./voice.js";
 import { startProsodyCapture, type ProsodyCapture } from "./prosody.js";
+import { recorderSupported, recordUtterance, type UtteranceHandle } from "./recorder.js";
 
 type Phase = "landing" | "chat" | "ended";
 type Status = "connecting" | "online" | "reconnecting" | "closed";
+type VoicePhase = "listening" | "thinking" | "speaking";
 
 interface ChatMessage {
   key: string;
@@ -39,15 +42,26 @@ export default function App() {
   const [handoffOffer, setHandoffOffer] = useState<string | null>(null);
   const [videoRoom, setVideoRoom] = useState<string | null>(null);
   const [waitingForHuman, setWaitingForHuman] = useState(false);
-  // Voice: silently unavailable when unsupported or mic denied (PRD).
-  const [voiceAvailable, setVoiceAvailable] = useState(() => voiceInputSupported());
-  const [voiceUnsupported] = useState(() => !voiceInputSupported());
+  // Voice: WebSpeech where available, MediaRecorder + server Whisper
+  // everywhere else — the mic works in every browser with a microphone.
+  const [voiceAvailable, setVoiceAvailable] = useState(
+    () => voiceInputSupported() || recorderSupported(),
+  );
+  const [voiceUnsupported] = useState(() => !voiceInputSupported() && !recorderSupported());
   const [voiceLang, setVoiceLang] = useState("auto");
   const [connectFailed, setConnectFailed] = useState(false);
   const [listening, setListening] = useState(false);
   const voiceRepliesRef = useRef(false);
   const listenRef = useRef<ListenSession | null>(null);
   const prosodyRef = useRef<ProsodyCapture | null>(null);
+  // Hands-free conversation mode (speak ↔ listen loop, any browser).
+  const [voiceMode, setVoiceMode] = useState(false);
+  const [voicePhase, setVoicePhase] = useState<VoicePhase>("listening");
+  const voiceModeRef = useRef(false);
+  const voiceLangRef = useRef("auto");
+  const spokenLangRef = useRef<string>(navigator.language);
+  const utteranceRef = useRef<UtteranceHandle | null>(null);
+  const listenLoopRef = useRef<() => void>(() => {});
   const clientRef = useRef<RealtimeClient | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
 
@@ -63,7 +77,13 @@ export default function App() {
         { key: nextKey(), sender: frame.sender, content: frame.content },
       ]);
       // Voice replies mirror the user's chosen mode (PRD: voice or text).
-      if (frame.sender !== "user" && voiceRepliesRef.current) {
+      if (frame.sender !== "user" && voiceModeRef.current) {
+        // Hands-free loop: speak the reply, then listen again.
+        setVoicePhase("speaking");
+        speak(frame.content, spokenLangRef.current, () => {
+          if (voiceModeRef.current) listenLoopRef.current();
+        });
+      } else if (frame.sender !== "user" && voiceRepliesRef.current) {
         speak(frame.content, navigator.language);
       }
     } else if (frame.type === "handoff.offer") {
@@ -125,13 +145,101 @@ export default function App() {
     clientRef.current?.sendMessage(content, prosody ?? undefined);
   }, []);
 
+  // One turn of the hands-free loop: record → Whisper → send. The reply
+  // handler (message.sent) speaks the answer and calls this again.
+  const listenLoop = useCallback(() => {
+    if (!voiceModeRef.current) return;
+    setVoicePhase("listening");
+    void (async () => {
+      const startedAt = Date.now();
+      const prosodyPromise = startProsodyCapture();
+      const blob = await recordUtterance({
+        onHandle: (h) => (utteranceRef.current = h),
+      });
+      const prosodyCapture = await prosodyPromise;
+      if (!voiceModeRef.current) {
+        prosodyCapture?.stop();
+        return;
+      }
+      if (!blob) {
+        prosodyCapture?.stop();
+        // Instant null = mic denied/unavailable → exit instead of spinning.
+        if (Date.now() - startedAt < 1000) {
+          voiceModeRef.current = false;
+          setVoiceMode(false);
+          return;
+        }
+        listenLoopRef.current(); // heard nothing — keep listening
+        return;
+      }
+      setVoicePhase("thinking");
+      const result = await transcribe(blob, voiceLangRef.current);
+      if (!voiceModeRef.current) {
+        prosodyCapture?.stop();
+        return;
+      }
+      if (result?.text) {
+        if (result.language) spokenLangRef.current = result.language;
+        prosodyRef.current = prosodyCapture;
+        sendVoice(result.text);
+        // reply arrives via message.sent → speak → loop continues
+      } else {
+        prosodyCapture?.stop();
+        listenLoopRef.current();
+      }
+    })();
+  }, [sendVoice]);
+  listenLoopRef.current = listenLoop;
+
+  const toggleVoiceMode = useCallback(() => {
+    if (voiceModeRef.current) {
+      voiceModeRef.current = false;
+      setVoiceMode(false);
+      utteranceRef.current?.cancel();
+      stopSpeaking();
+      return;
+    }
+    voiceModeRef.current = true;
+    voiceLangRef.current = voiceLang;
+    setVoiceMode(true);
+    stopSpeaking();
+    listenRef.current?.stop();
+    listenLoop();
+  }, [voiceLang, listenLoop]);
+
   const toggleListening = useCallback(() => {
     if (listening) {
       listenRef.current?.stop();
+      utteranceRef.current?.stop();
       return;
     }
     stopSpeaking();
     const lang = voiceLang === "auto" ? i18n.language || navigator.language : voiceLang;
+
+    if (!voiceInputSupported()) {
+      // No native engine (Firefox etc.): one-shot record → server Whisper.
+      setListening(true);
+      void (async () => {
+        const prosodyPromise = startProsodyCapture();
+        const blob = await recordUtterance({ onHandle: (h) => (utteranceRef.current = h) });
+        const capture = await prosodyPromise;
+        setListening(false);
+        if (!blob) {
+          capture?.stop();
+          return;
+        }
+        const result = await transcribe(blob, voiceLang);
+        if (result?.text) {
+          voiceRepliesRef.current = true;
+          prosodyRef.current = capture;
+          sendVoice(result.text);
+        } else {
+          capture?.stop();
+        }
+      })();
+      return;
+    }
+
     const session = listen(lang, {
       onInterim: (text) => setInput(text),
       onFinal: (text) => {
@@ -329,6 +437,15 @@ export default function App() {
               ●
             </button>
           )}
+          {voiceAvailable && (
+            <button
+              className="voice-mode-btn"
+              aria-label={t("voiceMode.start")}
+              onClick={toggleVoiceMode}
+            >
+              ∿
+            </button>
+          )}
           <button className="send" disabled={!input.trim() || connectFailed} onClick={send}>
             {t("chat.send")}
           </button>
@@ -379,6 +496,18 @@ export default function App() {
             allow="camera; microphone; fullscreen; display-capture"
             title="zenith-call"
           />
+        </div>
+      )}
+      {voiceMode && (
+        <div className="voice-veil">
+          <div className={`voice-orb orb-${voicePhase}`} aria-hidden />
+          <p className="voice-phase">{t(`voiceMode.${voicePhase}`)}</p>
+          <p className="voice-last">
+            {messages.length > 0 ? messages[messages.length - 1]?.content : ""}
+          </p>
+          <button className="voice-end" onClick={toggleVoiceMode}>
+            {t("voiceMode.end")}
+          </button>
         </div>
       )}
     </div>

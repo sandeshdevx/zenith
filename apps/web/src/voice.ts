@@ -107,8 +107,11 @@ export function listen(
 }
 
 /** Speak a buddy reply in the user's language; no-op when unsupported. */
-export function speak(text: string, lang: string): void {
-  if (!("speechSynthesis" in window)) return;
+export function speak(text: string, lang: string, onEnd?: () => void): void {
+  if (!("speechSynthesis" in window)) {
+    onEnd?.();
+    return;
+  }
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = lang;
   utterance.rate = 0.95; // slightly slower — calm, unhurried
@@ -117,6 +120,10 @@ export function speak(text: string, lang: string): void {
     voices.find((v) => v.lang === lang) ??
     voices.find((v) => v.lang.startsWith(lang.split("-")[0] ?? lang));
   if (match) utterance.voice = match;
+  if (onEnd) {
+    utterance.onend = onEnd;
+    utterance.onerror = onEnd;
+  }
   window.speechSynthesis.speak(utterance);
 }
 

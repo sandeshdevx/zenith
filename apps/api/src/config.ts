@@ -22,6 +22,8 @@ const envSchema = z.object({
    * the provider then sees conversation text (never any identity).
    * Crisis detection (CSI) always stays local either way.
    */
+  /** faster-whisper sidecar (services/inference) for cross-browser voice. */
+  STT_URL: z.string().default("http://127.0.0.1:8090"),
   LLM_PROVIDER: z.enum(["ollama", "openai-compat"]).default("ollama"),
   LLM_API_BASE_URL: z.string().optional(),
   LLM_API_KEY: z.string().optional(),
