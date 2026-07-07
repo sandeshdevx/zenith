@@ -8,6 +8,7 @@ import {
   endSession,
   escalate,
   fetchSupportOptions,
+  synthesize,
   transcribe,
   RealtimeClient,
   type SupportOption,
@@ -62,6 +63,25 @@ export default function App() {
   const spokenLangRef = useRef<string>(navigator.language);
   const utteranceRef = useRef<UtteranceHandle | null>(null);
   const listenLoopRef = useRef<() => void>(() => {});
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  /** Neural voice first (server), local speechSynthesis as fallback. */
+  const speakNaturally = useCallback((text: string, lang: string, onEnd: () => void) => {
+    void synthesize(text, lang).then((blob) => {
+      if (!blob) {
+        speak(text, lang, onEnd);
+        return;
+      }
+      const audio = new Audio(URL.createObjectURL(blob));
+      audioRef.current = audio;
+      audio.onended = () => {
+        URL.revokeObjectURL(audio.src);
+        onEnd();
+      };
+      audio.onerror = () => speak(text, lang, onEnd);
+      void audio.play().catch(() => speak(text, lang, onEnd));
+    });
+  }, []);
   const clientRef = useRef<RealtimeClient | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
 
@@ -78,13 +98,13 @@ export default function App() {
       ]);
       // Voice replies mirror the user's chosen mode (PRD: voice or text).
       if (frame.sender !== "user" && voiceModeRef.current) {
-        // Hands-free loop: speak the reply, then listen again.
+        // Hands-free loop: speak the reply naturally, then listen again.
         setVoicePhase("speaking");
-        speak(frame.content, spokenLangRef.current, () => {
+        speakNaturally(frame.content, spokenLangRef.current, () => {
           if (voiceModeRef.current) listenLoopRef.current();
         });
       } else if (frame.sender !== "user" && voiceRepliesRef.current) {
-        speak(frame.content, navigator.language);
+        speakNaturally(frame.content, spokenLangRef.current, () => {});
       }
     } else if (frame.type === "handoff.offer") {
       setHandoffOffer(frame.roomUrl);
@@ -173,7 +193,15 @@ export default function App() {
         return;
       }
       setVoicePhase("thinking");
-      const result = await transcribe(blob, voiceLangRef.current);
+      // Reusing the detected language as a hint skips Whisper's language-ID
+      // pass on every turn after the first — noticeably faster on CPU.
+      const hint =
+        voiceLangRef.current !== "auto"
+          ? voiceLangRef.current
+          : spokenLangRef.current.length === 2
+            ? spokenLangRef.current
+            : "auto";
+      const result = await transcribe(blob, hint);
       if (!voiceModeRef.current) {
         prosodyCapture?.stop();
         return;
@@ -196,6 +224,7 @@ export default function App() {
       voiceModeRef.current = false;
       setVoiceMode(false);
       utteranceRef.current?.cancel();
+      audioRef.current?.pause();
       stopSpeaking();
       return;
     }
@@ -231,6 +260,7 @@ export default function App() {
         const result = await transcribe(blob, voiceLang);
         if (result?.text) {
           voiceRepliesRef.current = true;
+          if (result.language) spokenLangRef.current = result.language;
           prosodyRef.current = capture;
           sendVoice(result.text);
         } else {

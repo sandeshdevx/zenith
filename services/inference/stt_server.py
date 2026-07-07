@@ -1,24 +1,46 @@
 """
-Zenith STT sidecar — faster-whisper behind a tiny FastAPI app.
+Zenith speech sidecar — faster-whisper STT + edge-tts neural voices.
 Implements the server half of patent module 101 (speech input) for browsers
 without a native speech engine, and for consistent cross-browser voice mode.
 
 POST /stt        raw audio body (webm/opus, wav, ogg…), optional ?lang=hi
                  → {"text": "...", "language": "hi", "duration": 3.2}
+POST /tts        {"text": "...", "lang": "hi"} → audio/mpeg (neural voice)
 GET  /health     → {"ok": true, "model": "small"}
 
-Audio is transcribed in memory and never written to disk (anonymity).
+Audio is processed in memory and never written to disk (anonymity).
+NOTE on /tts: edge-tts synthesizes via Microsoft's free online neural
+voices — the buddy's REPLY text (never the user's words, never any
+identity) is sent to that service. Set ZENITH_TTS=off to disable and
+fall back to the browser's local speechSynthesis.
 Run: .venv/Scripts/python stt_server.py   (port 8090, model via WHISPER_MODEL)
 """
 import io
 import os
 
+import edge_tts
 import uvicorn
-from fastapi import FastAPI, Query, Request
+from fastapi import FastAPI, Query, Request, Response
 from faster_whisper import WhisperModel
 
 MODEL_NAME = os.environ.get("WHISPER_MODEL", "small")
 PORT = int(os.environ.get("STT_PORT", "8090"))
+TTS_ENGINE = os.environ.get("ZENITH_TTS", "edge")
+
+# Warm, calm neural voices per language (Indian variants where available).
+TTS_VOICES = {
+    "en": "en-IN-NeerjaNeural",
+    "hi": "hi-IN-SwaraNeural",
+    "ta": "ta-IN-PallaviNeural",
+    "te": "te-IN-ShrutiNeural",
+    "bn": "bn-IN-TanishaaNeural",
+    "mr": "mr-IN-AarohiNeural",
+    "kn": "kn-IN-SapnaNeural",
+    "gu": "gu-IN-DhwaniNeural",
+    "ml": "ml-IN-SobhanaNeural",
+    "pa": "pa-IN-VaaniNeural",
+    "ur": "ur-IN-GulNeural",
+}
 
 app = FastAPI()
 print(f"[stt] loading faster-whisper '{MODEL_NAME}' (int8, CPU)…", flush=True)
@@ -46,6 +68,23 @@ async def stt(request: Request, lang: str | None = Query(default=None)):
     )
     text = " ".join(segment.text.strip() for segment in segments).strip()
     return {"text": text, "language": info.language, "duration": info.duration}
+
+
+@app.post("/tts")
+async def tts(payload: dict):
+    if TTS_ENGINE != "edge":
+        return Response(status_code=404)
+    text = (payload.get("text") or "").strip()[:600]
+    if not text:
+        return Response(status_code=400)
+    lang = (payload.get("lang") or "en").split("-")[0]
+    voice = TTS_VOICES.get(lang, TTS_VOICES["en"])
+    communicate = edge_tts.Communicate(text, voice, rate="-4%")
+    chunks = []
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            chunks.append(chunk["data"])
+    return Response(content=b"".join(chunks), media_type="audio/mpeg")
 
 
 if __name__ == "__main__":

@@ -74,6 +74,19 @@ export async function transcribe(
   return (await res.json()) as { text: string; language: string };
 }
 
+/** Neural TTS for buddy replies; null → caller falls back to local voices. */
+export async function synthesize(text: string, lang: string): Promise<Blob | null> {
+  if (!token) return null;
+  const res = await fetch("/api/v1/tts", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    body: JSON.stringify({ text, lang }),
+  }).catch(() => null);
+  if (!res?.ok) return null;
+  const blob = await res.blob();
+  return blob.size > 0 ? blob : null;
+}
+
 /** Ask for a human directly (manual escape hatch). */
 export async function escalate(): Promise<void> {
   if (!token || !sessionId) return;

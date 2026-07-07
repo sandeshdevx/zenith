@@ -6,8 +6,9 @@
  * Raw audio goes only to Zenith's own /api/v1/stt endpoint, in memory.
  */
 
-const SILENCE_RMS = 0.012;
-const CHECK_MS = 100;
+const CHECK_MS = 80;
+const CALIBRATION_MS = 400; // sample ambient noise before judging speech
+const MIN_THRESHOLD = 0.01;
 
 export interface UtteranceHandle {
   /** Finish now and resolve with whatever was recorded. */
@@ -35,12 +36,14 @@ export function recorderSupported(): boolean {
 
 /** Records one utterance; resolves null on mic denial or empty capture. */
 export async function recordUtterance(options: RecordOptions = {}): Promise<Blob | null> {
-  const silenceMs = options.silenceMs ?? 1500;
+  const silenceMs = options.silenceMs ?? 1100;
   const maxMs = options.maxMs ?? 30_000;
 
   let stream: MediaStream;
   try {
-    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await navigator.mediaDevices.getUserMedia({
+      audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+    });
   } catch {
     return null;
   }
@@ -67,6 +70,10 @@ export async function recordUtterance(options: RecordOptions = {}): Promise<Blob
     let silentFor = 0;
     let elapsed = 0;
     let cancelled = false;
+    // Adaptive threshold: calibrate against the room's ambient noise so
+    // detection works in quiet bedrooms and noisy hostels alike.
+    let noisePeak = 0;
+    let threshold = MIN_THRESHOLD;
 
     const cleanup = () => {
       window.clearInterval(vadTimer);
@@ -85,7 +92,15 @@ export async function recordUtterance(options: RecordOptions = {}): Promise<Blob
       analyser.getFloatTimeDomainData(buffer);
       let sum = 0;
       for (let i = 0; i < buffer.length; i++) sum += (buffer[i] ?? 0) ** 2;
-      const speaking = Math.sqrt(sum / buffer.length) >= SILENCE_RMS;
+      const rms = Math.sqrt(sum / buffer.length);
+
+      if (elapsed <= CALIBRATION_MS) {
+        noisePeak = Math.max(noisePeak, rms);
+        threshold = Math.max(MIN_THRESHOLD, noisePeak * 2.2);
+        return;
+      }
+
+      const speaking = rms >= threshold;
       options.onLevel?.(speaking);
 
       if (speaking) {

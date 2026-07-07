@@ -106,6 +106,44 @@ export function listen(
   return { stop: () => recognition.stop() };
 }
 
+// Browser voices load asynchronously — getVoices() is often EMPTY on the
+// first call, which silently falls back to the robotic default voice.
+// Cache them as they arrive and re-read on voiceschanged.
+let cachedVoices: SpeechSynthesisVoice[] = [];
+if ("speechSynthesis" in window) {
+  cachedVoices = window.speechSynthesis.getVoices();
+  window.speechSynthesis.addEventListener?.("voiceschanged", () => {
+    cachedVoices = window.speechSynthesis.getVoices();
+  });
+}
+
+/** Quality ranking: neural/online voices sound human; local SAPI does not. */
+function voiceScore(voice: SpeechSynthesisVoice, langPrefix: string): number {
+  let score = 0;
+  if (voice.lang.toLowerCase().startsWith(langPrefix)) score += 100;
+  const name = voice.name.toLowerCase();
+  if (name.includes("natural")) score += 50; // Edge neural voices
+  if (name.includes("neural")) score += 50;
+  if (name.includes("google")) score += 40; // Chrome online voices
+  if (name.includes("online")) score += 30;
+  if (!voice.localService) score += 20;
+  return score;
+}
+
+export function bestVoice(lang: string): SpeechSynthesisVoice | null {
+  const prefix = (lang.split("-")[0] ?? lang).toLowerCase();
+  let best: SpeechSynthesisVoice | null = null;
+  let bestScore = 0;
+  for (const voice of cachedVoices) {
+    const score = voiceScore(voice, prefix);
+    if (score > bestScore) {
+      best = voice;
+      bestScore = score;
+    }
+  }
+  return bestScore >= 100 ? best : null; // must at least match the language
+}
+
 /** Speak a buddy reply in the user's language; no-op when unsupported. */
 export function speak(text: string, lang: string, onEnd?: () => void): void {
   if (!("speechSynthesis" in window)) {
@@ -114,11 +152,8 @@ export function speak(text: string, lang: string, onEnd?: () => void): void {
   }
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.lang = lang;
-  utterance.rate = 0.95; // slightly slower — calm, unhurried
-  const voices = window.speechSynthesis.getVoices();
-  const match =
-    voices.find((v) => v.lang === lang) ??
-    voices.find((v) => v.lang.startsWith(lang.split("-")[0] ?? lang));
+  utterance.rate = 1.0;
+  const match = bestVoice(lang);
   if (match) utterance.voice = match;
   if (onEnd) {
     utterance.onend = onEnd;
