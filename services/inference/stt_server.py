@@ -21,14 +21,18 @@ import os
 import edge_tts
 import uvicorn
 from fastapi import FastAPI, Query, Request, Response
+from fastapi.responses import StreamingResponse
+from contextlib import asynccontextmanager
 from faster_whisper import WhisperModel
 
-MODEL_NAME = os.environ.get("WHISPER_MODEL", "small")
+MODEL_NAME = os.environ.get("WHISPER_MODEL", "small")  # 'tiny' for max speed, 'medium' for max accuracy
 PORT = int(os.environ.get("STT_PORT", "8090"))
 TTS_ENGINE = os.environ.get("ZENITH_TTS", "edge")
 
-# Warm, calm neural voices per language (Indian variants where available).
-TTS_VOICES = {
+# Preferred warm voices (Indian variants for languages spoken in India).
+# Everything else resolves dynamically from edge-tts's full catalogue at
+# startup — every language Microsoft's neural voices support, ~140 locales.
+PREFERRED_VOICES = {
     "en": "en-IN-NeerjaNeural",
     "hi": "hi-IN-SwaraNeural",
     "ta": "ta-IN-PallaviNeural",
@@ -42,10 +46,51 @@ TTS_VOICES = {
     "ur": "ur-IN-GulNeural",
 }
 
-app = FastAPI()
-print(f"[stt] loading faster-whisper '{MODEL_NAME}' (int8, CPU)…", flush=True)
-model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8")
-print("[stt] ready", flush=True)
+TTS_VOICES: dict[str, str] = dict(PREFERRED_VOICES)
+
+
+async def build_voice_catalogue() -> None:
+    """Map every language edge-tts knows to one pleasant neural voice.
+    Preference: Indian regional variant > female voice > first available."""
+    try:
+        voices = await edge_tts.list_voices()
+    except Exception as err:  # offline at startup — preferred map still works
+        print(f"[tts] voice catalogue unavailable ({err}); using preferred map", flush=True)
+        return
+    by_lang: dict[str, list[dict]] = {}
+    for voice in voices:
+        lang = voice["Locale"].split("-")[0].lower()
+        by_lang.setdefault(lang, []).append(voice)
+    for lang, options in by_lang.items():
+        if lang in PREFERRED_VOICES:
+            continue
+        options.sort(
+            key=lambda v: (
+                0 if v["Locale"].endswith("-IN") else 1,
+                0 if v.get("Gender") == "Female" else 1,
+                v["ShortName"],
+            )
+        )
+        TTS_VOICES[lang] = options[0]["ShortName"]
+    print(f"[tts] voice catalogue ready: {len(TTS_VOICES)} languages", flush=True)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await build_voice_catalogue()
+    yield
+
+app = FastAPI(lifespan=lifespan)
+
+# Auto-detect GPU: CUDA gives ~3-5x speedup on GTX 1650 and above.
+# Falls back to CPU int8 silently if CUDA is unavailable.
+try:
+    model = WhisperModel(MODEL_NAME, device="cuda", compute_type="float16")
+    print(f"[stt] loaded '{MODEL_NAME}' on GPU (float16, fast)", flush=True)
+except Exception:
+    model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8")
+    print(f"[stt] loaded '{MODEL_NAME}' on CPU (int8)", flush=True)
+print("[stt] ready — multilingual, auto-detect, 99 languages", flush=True)
+_on_gpu = model.model.device == "cuda"
 
 
 @app.get("/health")
@@ -55,20 +100,54 @@ def health():
 
 @app.post("/stt")
 async def stt(request: Request, lang: str | None = Query(default=None)):
+    global model, _on_gpu
     audio = await request.body()
     if not audio:
         return {"text": "", "language": lang or "", "duration": 0.0}
-    # Whisper language codes are bare ("hi", "ta"); browsers send BCP-47.
     language = lang.split("-")[0] if lang else None
-    segments, info = model.transcribe(
-        io.BytesIO(audio),
-        language=language,
-        vad_filter=True,
-        beam_size=1,  # greedy: ~2x faster on CPU, fine for short utterances
-    )
-    text = " ".join(segment.text.strip() for segment in segments).strip()
+
+    def _transcribe(audio_bytes: bytes):
+        segments, info = model.transcribe(
+            io.BytesIO(audio_bytes),
+            language=language,
+            vad_filter=True,
+            beam_size=1,
+        )
+        return " ".join(s.text.strip() for s in segments).strip(), info
+
+    try:
+        text, info = _transcribe(audio)
+    except RuntimeError as exc:
+        # cuBLAS / CUDA DLL missing (e.g. CUDA 11 system, needs 12) —
+        # reload on CPU and retry the same request transparently.
+        if _on_gpu and ("cublas" in str(exc).lower() or "cuda" in str(exc).lower()):
+            print(f"[stt] GPU runtime error — switching to CPU: {exc}", flush=True)
+            model = WhisperModel(MODEL_NAME, device="cpu", compute_type="int8")
+            _on_gpu = False
+            text, info = _transcribe(audio)
+        else:
+            raise
+
     return {"text": text, "language": info.language, "duration": info.duration}
 
+
+@app.get("/tts")
+async def tts_get(text: str, lang: str = "en"):
+    if TTS_ENGINE != "edge":
+        return Response(status_code=404)
+    text = text.strip()[:600]
+    if not text:
+        return Response(status_code=400)
+    lang = lang.split("-")[0]
+    voice = TTS_VOICES.get(lang, TTS_VOICES["en"])
+    
+    async def audio_stream():
+        communicate = edge_tts.Communicate(text, voice, rate="-4%")
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                yield chunk["data"]
+                
+    return StreamingResponse(audio_stream(), media_type="audio/mpeg")
 
 @app.post("/tts")
 async def tts(payload: dict):
@@ -79,12 +158,14 @@ async def tts(payload: dict):
         return Response(status_code=400)
     lang = (payload.get("lang") or "en").split("-")[0]
     voice = TTS_VOICES.get(lang, TTS_VOICES["en"])
-    communicate = edge_tts.Communicate(text, voice, rate="-4%")
-    chunks = []
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
-            chunks.append(chunk["data"])
-    return Response(content=b"".join(chunks), media_type="audio/mpeg")
+    
+    async def audio_stream():
+        communicate = edge_tts.Communicate(text, voice, rate="-4%")
+        async for chunk in communicate.stream():
+            if chunk["type"] == "audio":
+                yield chunk["data"]
+                
+    return StreamingResponse(audio_stream(), media_type="audio/mpeg")
 
 
 if __name__ == "__main__":

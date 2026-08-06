@@ -74,17 +74,10 @@ export async function transcribe(
   return (await res.json()) as { text: string; language: string };
 }
 
-/** Neural TTS for buddy replies; null → caller falls back to local voices. */
-export async function synthesize(text: string, lang: string): Promise<Blob | null> {
+/** Neural TTS for buddy replies; returns streaming URL. null → caller falls back to local voices. */
+export function getTtsUrl(text: string, lang: string): string | null {
   if (!token) return null;
-  const res = await fetch("/api/v1/tts", {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-    body: JSON.stringify({ text, lang }),
-  }).catch(() => null);
-  if (!res?.ok) return null;
-  const blob = await res.blob();
-  return blob.size > 0 ? blob : null;
+  return `/api/v1/tts?text=${encodeURIComponent(text)}&lang=${encodeURIComponent(lang)}&token=${encodeURIComponent(token)}`;
 }
 
 /** Ask for a human directly (manual escape hatch). */

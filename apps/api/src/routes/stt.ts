@@ -19,19 +19,19 @@ export function registerSttRoute(app: FastifyInstance, config: Config) {
     (_req, body, done) => done(null, body),
   );
 
-  function authed(req: FastifyRequest): boolean {
+  function authed(req: FastifyRequest<{ Querystring: { token?: string, lang?: string } }>): boolean {
     const auth = req.headers.authorization;
     const token = auth?.startsWith("Bearer ")
       ? auth.slice("Bearer ".length)
-      : req.cookies?.zenith_session;
-    return !!token && !!verifySessionToken(token, config.SESSION_TOKEN_SECRET);
+      : (req.query.token || req.cookies?.zenith_session);
+    return !!token && !!verifySessionToken(token as string, config.SESSION_TOKEN_SECRET);
   }
 
   // Neural text-to-speech for buddy replies (voice mode). The sidecar's
   // edge engine sends reply text (never user words, never identity) to
   // Microsoft's free neural voices; clients fall back to local
   // speechSynthesis when this returns non-200.
-  app.post<{ Body: { text?: string; lang?: string } }>("/api/v1/tts", async (req, reply) => {
+  app.post<{ Body: { text?: string; lang?: string }, Querystring: { token?: string } }>("/api/v1/tts", async (req, reply) => {
     if (!authed(req)) {
       const body: ErrorEnvelope = {
         error: { code: "UNAUTHORIZED", message: "Missing or invalid session token" },
@@ -45,9 +45,29 @@ export function registerSttRoute(app: FastifyInstance, config: Config) {
         body: JSON.stringify({ text: req.body?.text ?? "", lang: req.body?.lang ?? "en" }),
         signal: AbortSignal.timeout(30_000),
       });
-      if (!res.ok) return reply.code(503).send();
-      const audio = Buffer.from(await res.arrayBuffer());
-      return reply.header("content-type", "audio/mpeg").send(audio);
+      if (!res.ok || !res.body) return reply.code(503).send();
+      return reply.header("content-type", "audio/mpeg").send(res.body);
+    } catch {
+      return reply.code(503).send();
+    }
+  });
+
+  app.get<{ Querystring: { text?: string; lang?: string; token?: string } }>("/api/v1/tts", async (req, reply) => {
+    if (!authed(req)) {
+      const body: ErrorEnvelope = {
+        error: { code: "UNAUTHORIZED", message: "Missing or invalid session token" },
+      };
+      return reply.code(401).send(body);
+    }
+    try {
+      const text = encodeURIComponent(req.query.text ?? "");
+      const lang = encodeURIComponent(req.query.lang ?? "en");
+      const res = await fetch(`${config.STT_URL}/tts?text=${text}&lang=${lang}`, {
+        method: "GET",
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!res.ok || !res.body) return reply.code(503).send();
+      return reply.header("content-type", "audio/mpeg").send(res.body);
     } catch {
       return reply.code(503).send();
     }

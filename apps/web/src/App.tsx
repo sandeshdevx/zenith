@@ -8,7 +8,7 @@ import {
   endSession,
   escalate,
   fetchSupportOptions,
-  synthesize,
+  getTtsUrl,
   transcribe,
   RealtimeClient,
   type SupportOption,
@@ -29,6 +29,35 @@ interface ChatMessage {
 
 let keyCounter = 0;
 const nextKey = () => `m${++keyCounter}`;
+
+/**
+ * Detects the language of text from its Unicode script — works for all
+ * Indian languages and major world scripts. Returns a 2-letter BCP-47
+ * base tag ("hi", "te", "bn" …) or null for Latin-script text.
+ * Used to pick the correct TTS voice when the AI switches language.
+ */
+function detectTextLanguage(text: string): string | null {
+  const scripts: [RegExp, string][] = [
+    [/[\u0900-\u097F]/, "hi"],  // Devanagari → Hindi / Marathi
+    [/[\u0C00-\u0C7F]/, "te"],  // Telugu (also Tulu written in Telugu script)
+    [/[\u0980-\u09FF]/, "bn"],  // Bengali
+    [/[\u0B80-\u0BFF]/, "ta"],  // Tamil
+    [/[\u0C80-\u0CFF]/, "kn"],  // Kannada
+    [/[\u0D00-\u0D7F]/, "ml"],  // Malayalam
+    [/[\u0A00-\u0A7F]/, "pa"],  // Gurmukhi → Punjabi
+    [/[\u0A80-\u0AFF]/, "gu"],  // Gujarati
+    [/[\u0B00-\u0B7F]/, "or"],  // Odia
+    [/[\u0600-\u06FF]/, "ur"],  // Arabic script → Urdu
+    [/[\u4E00-\u9FFF]/, "zh"],  // CJK → Chinese
+    [/[\u3040-\u30FF]/,  "ja"], // Hiragana/Katakana → Japanese
+    [/[\uAC00-\uD7AF]/, "ko"],  // Hangul → Korean
+    [/[\u0400-\u04FF]/, "ru"],  // Cyrillic → Russian
+  ];
+  for (const [re, lang] of scripts) {
+    if (re.test(text)) return lang;
+  }
+  return null; // Latin script — keep current lang
+}
 
 export default function App() {
   const { t, i18n } = useTranslation();
@@ -60,27 +89,26 @@ export default function App() {
   const [voicePhase, setVoicePhase] = useState<VoicePhase>("listening");
   const voiceModeRef = useRef(false);
   const voiceLangRef = useRef("auto");
-  const spokenLangRef = useRef<string>(navigator.language);
+  // Start empty so Whisper auto-detects on the first turn (not biased to OS lang).
+  const spokenLangRef = useRef<string>("");
   const utteranceRef = useRef<UtteranceHandle | null>(null);
   const listenLoopRef = useRef<() => void>(() => {});
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
   /** Neural voice first (server), local speechSynthesis as fallback. */
   const speakNaturally = useCallback((text: string, lang: string, onEnd: () => void) => {
-    void synthesize(text, lang).then((blob) => {
-      if (!blob) {
-        speak(text, lang, onEnd);
-        return;
-      }
-      const audio = new Audio(URL.createObjectURL(blob));
-      audioRef.current = audio;
-      audio.onended = () => {
-        URL.revokeObjectURL(audio.src);
-        onEnd();
-      };
-      audio.onerror = () => speak(text, lang, onEnd);
-      void audio.play().catch(() => speak(text, lang, onEnd));
-    });
+    const url = getTtsUrl(text, lang);
+    if (!url) {
+      speak(text, lang, onEnd);
+      return;
+    }
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    audio.onended = () => {
+      onEnd();
+    };
+    audio.onerror = () => speak(text, lang, onEnd);
+    void audio.play().catch(() => speak(text, lang, onEnd));
   }, []);
   const clientRef = useRef<RealtimeClient | null>(null);
   const streamRef = useRef<HTMLDivElement | null>(null);
@@ -98,13 +126,17 @@ export default function App() {
       ]);
       // Voice replies mirror the user's chosen mode (PRD: voice or text).
       if (frame.sender !== "user" && voiceModeRef.current) {
-        // Hands-free loop: speak the reply naturally, then listen again.
+        // Auto-detect language from the reply's script so TTS switches
+        // automatically when the AI responds in Hindi, Telugu, etc.
+        const replyLang = detectTextLanguage(frame.content) ?? spokenLangRef.current;
+        if (replyLang !== spokenLangRef.current) spokenLangRef.current = replyLang;
         setVoicePhase("speaking");
-        speakNaturally(frame.content, spokenLangRef.current, () => {
+        speakNaturally(frame.content, replyLang, () => {
           if (voiceModeRef.current) listenLoopRef.current();
         });
       } else if (frame.sender !== "user" && voiceRepliesRef.current) {
-        speakNaturally(frame.content, spokenLangRef.current, () => {});
+        const replyLang = detectTextLanguage(frame.content) ?? spokenLangRef.current;
+        speakNaturally(frame.content, replyLang, () => {});
       }
     } else if (frame.type === "handoff.offer") {
       setHandoffOffer(frame.roomUrl);
@@ -165,11 +197,58 @@ export default function App() {
     clientRef.current?.sendMessage(content, prosody ?? undefined);
   }, []);
 
-  // One turn of the hands-free loop: record → Whisper → send. The reply
-  // handler (message.sent) speaks the answer and calls this again.
+  // One turn of the hands-free loop. The reply handler (message.sent) speaks
+  // the answer then calls this again to keep the conversation going.
+  // Fast path: native SpeechRecognition (Chrome/Edge) — instant, no sidecar.
+  // Slow path: MediaRecorder → Whisper sidecar (Firefox/Safari fallback).
   const listenLoop = useCallback(() => {
     if (!voiceModeRef.current) return;
     setVoicePhase("listening");
+
+    if (voiceInputSupported()) {
+      // "" = let the browser detect the language automatically (multilingual).
+      const lang = voiceLangRef.current === "auto" ? "" : voiceLangRef.current;
+      let finalFired = false;
+
+      const session = listen(lang, {
+        onInterim: () => {},
+        onFinal: (text) => {
+          finalFired = true;
+          if (!voiceModeRef.current) return;
+          setVoicePhase("thinking");
+          sendVoice(text);
+          // Loop resumes: message.sent → speakNaturally → onEnd → listenLoopRef.current()
+        },
+        onPartial: (text) => {
+          finalFired = true;
+          if (!voiceModeRef.current) return;
+          // Partial heard (recognition ended without a clean final) — still send.
+          if (text.trim()) {
+            setVoicePhase("thinking");
+            sendVoice(text);
+          } else {
+            listenLoopRef.current();
+          }
+        },
+        onDenied: () => {
+          voiceModeRef.current = false;
+          setVoiceMode(false);
+        },
+        onEnd: () => {
+          // Nothing was heard → restart; otherwise loop resumes from message.sent.
+          if (!finalFired && voiceModeRef.current) listenLoopRef.current();
+        },
+      });
+
+      if (session) {
+        // Allow toggleVoiceMode to cancel the active session.
+        utteranceRef.current = { stop: session.stop, cancel: session.stop };
+        return;
+      }
+      // WebSpeech session failed (e.g. no network) → fall through to Whisper.
+    }
+
+    // Whisper path: MediaRecorder → /api/v1/stt sidecar (Firefox/Safari).
     void (async () => {
       const startedAt = Date.now();
       const prosodyPromise = startProsodyCapture();
@@ -193,27 +272,26 @@ export default function App() {
         return;
       }
       setVoicePhase("thinking");
-      // Reusing the detected language as a hint skips Whisper's language-ID
-      // pass on every turn after the first — noticeably faster on CPU.
-      const hint =
-        voiceLangRef.current !== "auto"
-          ? voiceLangRef.current
-          : spokenLangRef.current.length === 2
-            ? spokenLangRef.current
-            : "auto";
-      const result = await transcribe(blob, hint);
+      // Always auto-detect language (no stale hint) — Whisper handles 99
+      // languages per utterance; re-using the previous lang would lock out
+      // the user if they switch mid-conversation.
+      const langHint = voiceLangRef.current !== "auto" ? voiceLangRef.current : undefined;
+      const result = await transcribe(blob, langHint);
       if (!voiceModeRef.current) {
         prosodyCapture?.stop();
         return;
       }
       if (result?.text) {
+        // Update the spoken language so TTS uses the right voice next turn.
         if (result.language) spokenLangRef.current = result.language;
         prosodyRef.current = prosodyCapture;
         sendVoice(result.text);
-        // reply arrives via message.sent → speak → loop continues
       } else {
         prosodyCapture?.stop();
-        listenLoopRef.current();
+        // Delay before retrying — avoids a tight loop when the STT sidecar
+        // is unreachable (the transcribe() fetch fails instantly each time).
+        await new Promise((r) => setTimeout(r, 2000));
+        if (voiceModeRef.current) listenLoopRef.current();
       }
     })();
   }, [sendVoice]);
@@ -243,7 +321,9 @@ export default function App() {
       return;
     }
     stopSpeaking();
-    const lang = voiceLang === "auto" ? i18n.language || navigator.language : voiceLang;
+    // "" = let the browser auto-detect the spoken language (Chrome supports
+    // Hindi, Tamil, Telugu, Marathi, etc. without a forced locale).
+    const lang = voiceLang === "auto" ? "" : voiceLang;
 
     if (!voiceInputSupported()) {
       // No native engine (Firefox etc.): one-shot record → server Whisper.
@@ -294,7 +374,7 @@ export default function App() {
     } else {
       setVoiceAvailable(false);
     }
-  }, [listening, i18n.language, voiceLang, sendVoice]);
+  }, [listening, voiceLang, sendVoice]);
 
   const leave = useCallback(async () => {
     clientRef.current?.stop();

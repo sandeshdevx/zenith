@@ -8,7 +8,7 @@
 
 const CHECK_MS = 80;
 const CALIBRATION_MS = 400; // sample ambient noise before judging speech
-const MIN_THRESHOLD = 0.01;
+const MIN_THRESHOLD = 0.005; // catch softer voices
 
 export interface UtteranceHandle {
   /** Finish now and resolve with whatever was recorded. */
@@ -36,7 +36,7 @@ export function recorderSupported(): boolean {
 
 /** Records one utterance; resolves null on mic denial or empty capture. */
 export async function recordUtterance(options: RecordOptions = {}): Promise<Blob | null> {
-  const silenceMs = options.silenceMs ?? 1100;
+  const silenceMs = options.silenceMs ?? 1500; // give user time to finish sentence
   const maxMs = options.maxMs ?? 30_000;
 
   let stream: MediaStream;
@@ -96,7 +96,7 @@ export async function recordUtterance(options: RecordOptions = {}): Promise<Blob
 
       if (elapsed <= CALIBRATION_MS) {
         noisePeak = Math.max(noisePeak, rms);
-        threshold = Math.max(MIN_THRESHOLD, noisePeak * 2.2);
+        threshold = Math.max(MIN_THRESHOLD, noisePeak * 1.8); // 1.8x: sensitive but not jumpy
         return;
       }
 
@@ -112,8 +112,8 @@ export async function recordUtterance(options: RecordOptions = {}): Promise<Blob
 
       const doneBySilence = heardSpeech && silentFor >= silenceMs;
       const doneByTime = elapsed >= maxMs;
-      // Nothing said at all within 8s → give up quietly.
-      const doneByNoSpeech = !heardSpeech && elapsed >= 8000;
+      // Nothing said at all within 10s → give up quietly.
+      const doneByNoSpeech = !heardSpeech && elapsed >= 10_000;
       if (doneBySilence || doneByTime || doneByNoSpeech) {
         if (recorder.state !== "inactive") recorder.stop();
       }

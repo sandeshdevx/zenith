@@ -37,6 +37,9 @@ function recognitionCtor(): RecognitionCtor | null {
 }
 
 export function voiceInputSupported(): boolean {
+  // Use native WebSpeech (Chrome/Edge) so the mic button always works even
+  // without the STT sidecar. The hands-free voice loop (∿) uses Whisper for
+  // accurate multilingual detection regardless of this flag.
   return recognitionCtor() !== null;
 }
 
@@ -66,7 +69,11 @@ export function listen(
   const Ctor = recognitionCtor();
   if (!Ctor) return null;
   const recognition = new Ctor();
-  recognition.lang = lang;
+  // Chrome's WebSpeech API does NOT accept an empty string for lang —
+  // it causes an instant silent failure ("no-speech" / abort).  When
+  // the caller passes "" (auto-detect), leave lang unset so the browser
+  // falls back to navigator.language, which works reliably.
+  if (lang) recognition.lang = lang;
   recognition.continuous = false;
   recognition.interimResults = true;
 
@@ -102,7 +109,12 @@ export function listen(
     }
     handlers.onEnd();
   };
-  recognition.start();
+  try {
+    recognition.start();
+  } catch {
+    // start() can throw DOMException synchronously (mic busy, no gesture, …).
+    return null;
+  }
   return { stop: () => recognition.stop() };
 }
 

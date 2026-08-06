@@ -7,8 +7,11 @@ const envSchema = z.object({
     .string()
     .default("postgres://zenith:zenith@localhost:5432/zenith"),
   OLLAMA_URL: z.string().default("http://localhost:11434"),
-  /** Any open-weights chat model served by Ollama (PRD default: Mistral 7B). */
-  OLLAMA_MODEL: z.string().default("mistral:7b-instruct-q4_K_M"),
+  /** Any open-weights chat model served by Ollama.
+   *  GTX 1650 / 4 GB VRAM: llama3.2:3b (2 GB VRAM, fast).
+   *  RTX 3060 / 8 GB VRAM: mistral:7b-instruct-q4_K_M.
+   */
+  OLLAMA_MODEL: z.string().default("llama3.2:3b"),
   LLM_NUM_PREDICT: z.coerce.number().default(200),
   LLM_TIMEOUT_MS: z.coerce.number().default(120000),
   /** GPU layers for Ollama; 0 forces CPU (leave unset for auto). */
