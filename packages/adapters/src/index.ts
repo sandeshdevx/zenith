@@ -8,7 +8,7 @@ export type {
 export { OllamaLlmAdapter, OpenAICompatLlmAdapter } from "./llm.js";
 
 export type { RiskAdapter, RiskAssessment, RiskTier } from "./risk.js";
-export { KeywordSentinelAdapter, RISK_TIER_RANK } from "./risk.js";
+export { KeywordSentinelAdapter, RISK_TIER_RANK, SENTINEL_S1 } from "./risk.js";
 
 export type { EmbeddingAdapter, OllamaEmbeddingConfig } from "./embeddings.js";
 export { OllamaEmbeddingAdapter, cosineSimilarity } from "./embeddings.js";

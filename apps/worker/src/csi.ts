@@ -15,6 +15,7 @@ import {
   isPlausibleProsody,
   scoreProsody,
   RISK_TIER_RANK,
+  SENTINEL_S1,
   type EmbeddingAdapter,
   type ProsodyFeatures,
   type RiskAdapter,
@@ -74,9 +75,6 @@ const DISTRESS_SPAN = 0.22; // floor → floor+span maps to 0 → 100
 // the range reserved for stated intent — Tier 4 needs explicit language or
 // sustained multi-signal escalation, not one paraphrase-adjacent sentence.
 const SEMANTIC_S1_CAP = 80;
-
-// Sentinel tier → representative S1 contribution (0–100).
-const SENTINEL_S1: Record<RiskTier, number> = { green: 5, yellow: 40, orange: 65, red: 92 };
 
 export interface CsiWeights {
   w1: number;

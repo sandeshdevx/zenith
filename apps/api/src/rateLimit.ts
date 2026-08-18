@@ -12,7 +12,7 @@
 const WINDOW_MS = 60 * 60 * 1000;
 const SOFT_LIMIT = 3;
 
-const creations = new Map<string, number[]>();
+export const creations = new Map<string, number[]>();
 
 export function recordSessionCreation(ip: string, nowMs = Date.now()): { overLimit: boolean } {
   const windowStart = nowMs - WINDOW_MS;

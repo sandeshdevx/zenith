@@ -9,6 +9,9 @@
   "scripts": {
     "dev:api": "npm run dev -w @zenith/api",
     "dev:worker": "npm run dev -w @zenith/worker",
+    "dev:web": "npm run dev -w @zenith/web",
+    "dev:dashboard": "npm run dev -w @zenith/dashboard",
+    "dev:all": "concurrently -n API,WORKER,WEB,DASH -c cyan,yellow,green,magenta \"npm run dev:api\" \"npm run dev:worker\" \"npm run dev:web\" \"npm run dev:dashboard\"",
     "migrate": "npm run migrate -w @zenith/api",
     "db:init": "powershell -ExecutionPolicy Bypass -File infra/scripts/db.ps1 init",
     "db:start": "powershell -ExecutionPolicy Bypass -File infra/scripts/db.ps1 start",
@@ -19,5 +22,8 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
   }
 }

@@ -61,12 +61,36 @@ onUserMessage = (sessionId, content, messageId) => {
   }
 };
 
+/** Auto-seed a demo counsellor on first run so evaluators can test the dashboard immediately. */
+async function ensureDemoCounsellor(): Promise<void> {
+  const pool = getPool(config);
+  const { rows } = await pool.query("SELECT id FROM counsellors LIMIT 1");
+  if (rows.length === 0) {
+    const demoEmail = "demo@zenith.local";
+    const { rows: inserted } = await pool.query(
+      `INSERT INTO counsellors (email, display_name, is_active)
+       VALUES ($1, $2, true)
+       ON CONFLICT (email) DO UPDATE SET display_name = $2, is_active = true
+       RETURNING id`,
+      [demoEmail, "Demo Counsellor"],
+    );
+    app.log.info({ id: inserted[0].id, email: demoEmail }, "Auto-seeded demo counsellor");
+    app.log.info("  → Login at /counsellor/ with email: demo@zenith.local");
+    app.log.info("  → Magic link token will appear in API logs (no SMTP configured)");
+  }
+}
+
 app
   .listen({ port: config.PORT, host: config.HOST })
   .catch((err) => {
     app.log.error(err);
     process.exit(1);
   });
+
+// Ensure demo counsellor exists after server starts
+ensureDemoCounsellor().catch((err) =>
+  app.log.error({ err: { message: err.message } }, "Demo counsellor seeding failed"),
+);
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, async () => {

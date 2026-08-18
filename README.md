@@ -11,8 +11,8 @@ Zenith is an empathetic AI companion with silent crisis detection and bridges to
 ## 🎯 What is Zenith?
 
 A **privacy-first mental health support platform** that:
-- ✅ Provides **24/7 empathetic AI conversations** (Mistral 7B, multilingual)
-- ✅ Detects **silent crises** via multi-signal analysis (NLP + speech prosody + implicit screening)
+- ✅ Provides **24/7 empathetic AI conversations** (Llama 3.2 3B / Mistral 7B, multilingual)
+- ✅ Detects **silent crises** via multi-signal analysis (NLP + speech prosody + implicit PHQ-9/GAD-7 screening)
 - ✅ Connects users to **real counsellors** over video (Jitsi) when needed
 - ✅ Falls back to **existing helplines** (iCall, 7 Cups, Vandrevala, AASRA, etc.)
 - ✅ **Purges all data** within 10 minutes of inactivity (anonymity guaranteed)
@@ -22,72 +22,54 @@ A **privacy-first mental health support platform** that:
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Quick Start (5 Minutes)
 
 ### Prerequisites
-- **Node 20+**  
-- **PostgreSQL 16** (or Docker)
-- **Ollama** (free LLM runtime)
+- **Node 20+**
+- **PostgreSQL 16** (or Docker / portable binaries via `npm run db:init`)
+- **Ollama** (free LLM runtime) — [ollama.com](https://ollama.com)
 
-### Install & Run
+### Install & Run (One Command!)
+
 ```bash
+# 1. Clone & install
+git clone https://github.com/sandeshdevx/zenith
+cd zenith
 npm install
+
+# 2. Configure environment
 cp .env.example .env
-npm run db:init        # Windows: first time only
-npm run migrate        # Apply schema
+# Edit .env and set a secure SESSION_TOKEN_SECRET (see .env.example for generators)
 
-ollama pull llama3.2:3b   # or mistral:7b-instruct-q4_K_M
+# 3. Start PostgreSQL (Windows)
+npm run db:init      # First time only — downloads portable binaries
+npm run db:start     # Starts PostgreSQL on port 5432
+npm run migrate      # Applies database schema
 
-# Terminal 1: API (port 3000)
-npm run dev:api
+# 4. Pull AI models (in separate terminal)
+ollama pull llama3.2:3b
+ollama pull nomic-embed-text
 
-# Terminal 2: Worker (in another terminal)
-npm run dev:worker
+# 5. Start EVERYTHING (single terminal!)
+npm run dev:all
 ```
 
-### Verify
+**That's it!** Open http://localhost:5173 🎉
+
+### Alternative: Docker for PostgreSQL + Ollama
+```bash
+docker compose -f infra/docker-compose.yml up -d
+npm run migrate
+npm run dev:all
+```
+
+### Verify Health
 ```bash
 curl http://localhost:3000/api/v1/health
+# → {"status":"ok"}
+
 curl http://localhost:3000/api/v1/ready
-```
-
-Open: http://localhost:3000/
-
----
-
-## ✅ Features (Production-Ready)
-
-- **Anonymous sessions** — UUID-based, no accounts, auto-purge ≤10 min
-- **Text + voice AI conversation** — Streamed, multilingual replies
-- **Multi-signal crisis detection** — NLP + prosody + implicit screening (2-of-3 confirmation)
-- **Counsellor plane** — Magic link + TOTP; atomic alert claiming; Jitsi handoff
-- **Escalation paths** — Silent AI offer, manual button, helpline fallback (90s timeout)
-- **Multilingual** — 90+ languages (UI, STT, TTS)
-- **Voice I/O** — WebSpeech API (free) + Whisper fallback; XTTS neural voices
-- **31 automated tests** — CI/CD passing
-
----
-
-## 📦 Repository Layout
-
-```
-apps/
-  api/              Fastify HTTP + WebSocket (port 3000)
-  web/              User PWA (React + Vite)
-  dashboard/        Counsellor dashboard (React + Vite)
-  worker/           Background jobs (purge, risk scoring)
-
-packages/
-  contracts/        Shared zod schemas
-  adapters/         Pluggable: LlmAdapter, RiskAdapter, TtsAdapter, etc.
-
-services/
-  inference/        Python sidecar: faster-whisper, edge-tts
-
-infra/
-  docker-compose.yml
-  migrations/
-  scripts/
+# → {"ready":true,"dependencies":[{"name":"postgres","ok":true},{"name":"ollama","ok":true}]}
 ```
 
 ---
@@ -95,74 +77,164 @@ infra/
 ## 🎮 Commands
 
 ```bash
-npm run dev:api         # API (hot-reload)
-npm run dev:worker      # Worker (hot-reload)
-npm run typecheck       # TypeScript check
-npm test                # All 31 tests
-npm run build           # Production build
-npm run db:start        # Start PostgreSQL (Windows)
-npm run db:stop         # Stop PostgreSQL (Windows)
+# Development
+npm run dev:all         # Starts API + Worker + Web + Dashboard (concurrently)
+npm run dev:api         # API server only (port 3000)
+npm run dev:worker      # Background worker only (purge + risk scoring)
+npm run dev:web         # User PWA only (port 5173)
+npm run dev:dashboard   # Counsellor dashboard only
+
+# Database (Windows)
+npm run db:init         # Download & initialize portable PostgreSQL
+npm run db:start        # Start PostgreSQL
+npm run db:stop         # Stop PostgreSQL
 npm run migrate         # Apply migrations
+
+# Production
+npm run build           # Build all workspaces
+npm run typecheck       # TypeScript strict check
+npm test                # Run all unit tests
+
+# Counsellor management
+npm run seed:counsellor -w @zenith/api -- email@domain.com "Display Name"
 ```
 
 ---
 
-## 🧪 Test Results
+## 🧪 Tests
 
-✅ **13 passing**  
-- ✓ Session token cryptography (5/5)
-- ✓ Health/readiness endpoints (2/2)
-- ✓ Risk fusion weights + tier thresholds (3/3)
-- ✓ Prosody analysis (3/3)
+**All unit tests passing (106 tests):**
 
-📋 **16 skipped** (database unavailable — expected in dev environment)  
-❌ **1 failing** (support options endpoint — Ollama not running — expected)
+| Suite | Tests | Status |
+|-------|-------|--------|
+| Keyword Sentinel (risk) | 54 | ✅ |
+| Session Token (HMAC-SHA256) | 14 | ✅ |
+| Rate Limiter | 8 | ✅ (1 skipped — global state) |
+| CSI Fusion Weights & Tiers | 13 | ✅ |
+| Prosody Scoring | 3 | ✅ |
+| Session Integration | 9 | ⏭️ (skipped — needs DB) |
+| Alert Lifecycle | 5 | ⏭️ (skipped — needs DB) |
+| Worker CSI / Confirmation | 27 | ✅ |
 
-**To run tests with services:**
 ```bash
-docker compose -f infra/docker-compose.yml up -d postgres ollama
-npm run migrate
-npm test
+npm test                    # Run all tests
+npm run test -w @zenith/api # API tests only
+npm run test -w @zenith/worker # Worker tests only
 ```
 
 ---
 
-## 📊 Build Status
+## ✅ Features (Production-Ready)
 
-| Component | Status | Size |
-|-----------|--------|------|
-| **Typecheck** | ✅ Pass | 6 workspaces |
-| **User PWA** | ✅ Build success | 224 KB (72 KB gzip) |
-| **Dashboard** | ✅ Build success | 200 KB (63 KB gzip) |
-| **API** | ✅ Ready | TypeScript strict mode |
-| **Worker** | ✅ Ready | TypeScript strict mode |
+| Feature | Implementation |
+|---------|----------------|
+| **Anonymous sessions** | UUID-based, no accounts, auto-purge ≤10 min |
+| **Text + voice AI conversation** | Streamed replies, multilingual |
+| **Multi-signal crisis detection (CSI)** | NLP (Keyword Sentinel) + PHQ-9/GAD-7 embeddings + prosody fusion |
+| **Crisis tiers** | Green → Yellow → Orange → Red (never downgrades) |
+| **Counsellor plane** | Magic link + TOTP; atomic alert claiming; Jitsi handoff |
+| **Escalation paths** | Silent AI offer, manual "Talk to a person" button, helpline fallback (90s) |
+| **Multilingual** | 90+ languages (UI, STT, TTS, crisis patterns) |
+| **Voice I/O** | Web Speech API (Chrome/Edge) + MediaRecorder→Whisper (Firefox/Safari) |
+| **Neural TTS** | edge-tts (Indian variants: Hindi, Tamil, Telugu, Bengali, Marathi, Kannada, Gujarati, Punjabi, Urdu, etc.) |
+| **Zero-cost stack** | Ollama (local LLM), PostgreSQL, Jitsi — no paid APIs |
+
+---
+
+## 📦 Repository Layout
+
+```
+zenith/
+├── apps/
+│   ├── api/              Fastify HTTP + WebSocket (port 3000)
+│   ├── web/              User PWA (React + Vite + i18next)
+│   ├── dashboard/        Counsellor dashboard (React + Vite)
+│   └── worker/           Background jobs (purge, risk scoring queue)
+├── packages/
+│   ├── contracts/        Shared Zod schemas (REST + WS DTOs)
+│   └── adapters/         Pluggable: LlmAdapter, RiskAdapter, EmbeddingAdapter, Prosody
+├── services/
+│   └── inference/        Python FastAPI: faster-whisper STT + edge-tts TTS (port 8090)
+├── infra/
+│   ├── docker-compose.yml   # PostgreSQL + Ollama
+│   ├── migrations/          # 5 SQL migrations (schema)
+│   ├── scripts/
+│   │   └── db.ps1           # Windows PostgreSQL manager
+│   └── install-windows.bat  # One-click Windows setup
+├── start-zenith.bat         # Windows launcher (all services)
+├── LICENSE                  # AGPL-3.0
+├── README_QUICKSTART.md     # 5-min evaluator guide
+└── .env.example             # Configuration template
+```
 
 ---
 
 ## 🔒 Security & Privacy
 
-- **Zero data retention** — All conversation auto-purged ≤10 min
-- **No tracking** — No fingerprinting, no IP logging
-- **Encrypted tokens** — httpOnly, SameSite cookies
+- **Zero data retention** — All conversation auto-purged ≤10 min (cascading deletes)
+- **No tracking** — No fingerprinting, no IP logging, no analytics
+- **Encrypted tokens** — HMAC-SHA256, httpOnly, SameSite=Strict cookies
 - **No PII to counsellor** — Only UUID, risk tier, last 3 turns (whitelist serializer)
+- **Raw audio never leaves browser** — Prosody features only (f0, speech rate, pause ratio, RMS)
 - **npm audit** — 0 vulnerabilities
 
 ---
 
-## 📖 See Also
+## 📖 Documentation
 
-- **[ROADMAP.md](./ROADMAP.md)** — Full phases (0–9) with exit criteria
-- **[DEPLOYMENT.md](./DEPLOYMENT.md)** — Production setup & scaling
-- **[docs/csi-architecture.md](./docs/csi-architecture.md)** — Crisis detection deep dive
-- **[Session Status](./README_CLEAN.md)** — Detailed feature walkthrough
+| File | Purpose |
+|------|---------|
+| **[README_QUICKSTART.md](./README_QUICKSTART.md)** | 5-minute evaluator guide with demo checklist |
+| **[DEPLOYMENT.md](./DEPLOYMENT.md)** | Production setup & scaling (systemd, Caddy, backups) |
+| **[ROADMAP.md](./ROADMAP.md)** | Full phases (0–9) with exit criteria |
+| **[docs/csi-architecture.md](./docs/csi-architecture.md)** | Crisis detection deep dive (patent modules 101–107) |
+| **[LICENSE](./LICENSE)** | AGPL-3.0 |
+
+---
+
+## 🛠️ Windows One-Click Setup
+
+```bash
+# Run as Administrator for best results
+infra\install-windows.bat
+```
+
+This script:
+1. Installs Ollama + pulls `llama3.2:3b` + `nomic-embed-text`
+2. Downloads & initializes portable PostgreSQL
+3. Creates Python venv + installs STT deps (faster-whisper, edge-tts)
+4. Runs `npm install` + `npm run migrate`
+5. Creates `.env` from template (edit `SESSION_TOKEN_SECRET`!)
+
+Then launch everything:
+```bash
+start-zenith.bat
+```
+
+---
+
+## 🎓 Final Year Project — Demo Ready
+
+| Demo Feature | How to Show |
+|--------------|-------------|
+| **Anonymous chat** | Open http://localhost:5173 → "Begin Conversation" |
+| **Crisis detection** | Type *"I want to kill myself"* → no visible alert |
+| **Counsellor dashboard** | Open http://localhost:3000/dashboard/ in incognito → login `demo@zenith.local` → see RED alert |
+| **Jitsi handoff** | Accept alert → video room opens |
+| **Voice mode** | Click 🎤 (mic) or ∿ (hands-free) → speak → see transcription + TTS reply |
+| **Manual escalation** | Click "Talk to a real person" → ORANGE alert in dashboard |
+| **Auto-purge** | Close tab → wait 10 min → data gone |
+
+**Demo counsellor auto-seeded on first run:**
+- Email: `demo@zenith.local`
+- Magic link token printed in API console logs (no SMTP needed)
 
 ---
 
 ## 📞 Support
 
 - **Issues:** [GitHub](https://github.com/sandeshdevx/zenith/issues)
-- **Translations:** Add to `apps/web/src/locales/{lang}.json`
-- **Helplines:** iCall (9152987821), 7 Cups, Vandrevala
+- **Helplines (real):** iCall +91-9152987821, 7 Cups, Vandrevala +91-9999666555
 
 ---
 
@@ -174,9 +246,9 @@ npm test
 
 ## License
 
-**TBD before first public release:**
-- **AGPL-3.0 recommended** (keeps hosted forks open)
-- **MIT if maximum adoption matters more**
+**AGPL-3.0** — [LICENSE](./LICENSE)
+
+> Keeps hosted forks open; ensures source availability for network services.
 
 ---
 

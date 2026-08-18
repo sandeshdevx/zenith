@@ -18,6 +18,9 @@ export const RISK_TIER_RANK: Record<RiskTier, number> = {
   red: 3,
 };
 
+/** Sentinel tier → representative S1 contribution (0–100). */
+export const SENTINEL_S1: Record<RiskTier, number> = { green: 5, yellow: 40, orange: 65, red: 92 };
+
 export interface RiskAssessment {
   tier: RiskTier;
   /** 0..1 — rule adapters emit coarse confidence per tier. */
