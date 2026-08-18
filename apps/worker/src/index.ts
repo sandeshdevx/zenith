@@ -7,6 +7,14 @@ import { Pool } from "pg";
 import PgBoss from "pg-boss";
 import { z } from "zod";
 import { KeywordSentinelAdapter, OllamaEmbeddingAdapter } from "@zenith/adapters";
+
+for (const candidate of [".env", "../../.env"]) {
+  try {
+    process.loadEnvFile(candidate);
+    break;
+  } catch {}
+}
+
 import { purgeExpiredSessions } from "./purge.js";
 import { CsiEngine } from "./csi.js";
 import {
@@ -115,6 +123,7 @@ for (const signal of ["SIGINT", "SIGTERM"] as const) {
 }
 
 main().catch((err) => {
-  console.error(`[worker] fatal: ${err.message}`);
+  console.error("[worker] fatal error:");
+  console.error(err);
   process.exit(1);
 });

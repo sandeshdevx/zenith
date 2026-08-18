@@ -23,8 +23,10 @@ export function buildServer(config: Config, options: ServerOptions = {}) {
   const app = Fastify({
     logger: {
       level: "info",
-      // Anonymity guarantee: never log request bodies or query strings —
-      // conversation content must not reach log storage.
+      transport: {
+        target: "pino-pretty",
+        options: { translateTime: "SYS:standard", ignore: "pid,hostname" },
+      },
       serializers: {
         req(req) {
           return { method: req.method, url: req.url.split("?")[0] };
@@ -34,7 +36,7 @@ export function buildServer(config: Config, options: ServerOptions = {}) {
   });
 
   app.setErrorHandler((err: FastifyError, _req, reply) => {
-    app.log.error({ err: { message: err.message, code: err.code } });
+    app.log.error(err, "Unhandled route error");
     const body: ErrorEnvelope = {
       error: {
         code: err.code ?? "INTERNAL_ERROR",

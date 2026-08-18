@@ -44,7 +44,7 @@ const PATTERNS: Pattern[] = [
   // ---- RED: intent ----
   { id: "en-kill-self", tier: "red", re: /\b(kill(ing)?\s+myself|end(ing)?\s+my\s+life|take\s+my\s+(own\s+)?life)\b/i },
   { id: "en-suicide", tier: "red", re: /\bsuicid(e|al)\b/i },
-  { id: "en-want-die", tier: "red", re: /\b(want(s)?\s+to\s+die|wish\s+i\s+(was|were)\s+dead|better\s+off\s+dead|going\s+to\s+end\s+it(\s+all)?)\b/i },
+  { id: "en-want-die", tier: "red", re: /\b(want(s)?\s+to\s+die|will\s+die|am\s+going\s+to\s+die|wish\s+i\s+(was|were)\s+dead|better\s+off\s+dead|going\s+to\s+end\s+it(\s+all)?)\b/i },
   { id: "hi-khudkushi", tier: "red", re: /\b(khudkushi|aatm?ahatya)\b/i },
   { id: "hi-marna", tier: "red", re: /\bmar(na|ne)\s+(chaht[ai]|hai\s+mujhe)\b/i },
   { id: "hi-jaan", tier: "red", re: /\b(apni\s+)?jaan\s+(de\s+d|le\s+l|khatam)\w*/i },

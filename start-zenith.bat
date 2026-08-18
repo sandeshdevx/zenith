@@ -36,9 +36,29 @@ if errorlevel 1 (
     echo  [1/5] LM Studio OK — model server is running on :1234
 )
 echo.
+rem ── Step 1.5: Verify Ollama ───────────────────────────────────────────────────
+echo  [2/6] Checking Ollama API...
+curl -s --max-time 3 http://localhost:11434/api/tags >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo  ┌─────────────────────────────────────────────────────────┐
+    echo  │  ACTION REQUIRED: Ollama is not running.                │
+    echo  │                                                         │
+    echo  │  Zenith uses Ollama to run the crisis detection math.   │
+    echo  │  1. Please install Ollama from ollama.com               │
+    echo  │  2. Run 'ollama pull nomic-embed-text' in a terminal    │
+    echo  │  3. Start the Ollama app                                │
+    echo  │  4. Press any key here to continue anyway...            │
+    echo  └─────────────────────────────────────────────────────────┘
+    echo.
+    pause
+) else (
+    echo  [2/6] Ollama OK — embedding server is running on :11434
+)
+echo.
 
 rem ── Step 2: PostgreSQL ───────────────────────────────────────────────────────
-echo  [2/5] Starting PostgreSQL...
+echo  [3/6] Starting PostgreSQL...
 call npm run db:start --prefix "%ROOT%" >nul 2>&1
 echo  [2/5] PostgreSQL ready.
 echo.
