@@ -52,7 +52,7 @@ export function registerCounsellorGateway(app: FastifyInstance, config: Config, 
   const client = pool.connect();
   client.then((c) => {
     c.on("notification", (msg) => {
-      if (msg.channel === "zenith_pipeline") {
+      if (msg.channel === "zenith_pipeline" && msg.payload) {
         try {
           const frame = JSON.parse(msg.payload) as CounsellorServerFrame;
           broadcastToCounsellors(frame);
