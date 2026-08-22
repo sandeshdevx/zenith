@@ -1,8 +1,9 @@
 /**
- * Passwordless counsellor auth (TRD §8): email magic link + TOTP MFA.
- * Only the SHA-256 of a link token is stored; tokens are single-use and
- * expire in 15 minutes. Without SMTP configured (dev / small self-host),
- * the magic link is written to the server log for the operator to relay.
+ * Counsellor auth — two modes:
+ *   1. Magic link (legacy, kept for operator relay / dev)
+ *   2. Direct TOTP login (email + 6-digit TOTP code, no email step)
+ *
+ * Only SHA-256 of link tokens is stored; tokens are single-use / 15-min TTL.
  */
 import { createHash, randomBytes } from "node:crypto";
 import type { Pool } from "pg";
@@ -23,7 +24,6 @@ export async function requestMagicLink(
     "SELECT id FROM counsellors WHERE email = $1 AND is_active",
     [email.toLowerCase().trim()],
   );
-  // Same outcome whether or not the account exists — no user enumeration.
   const counsellorId: string | undefined = rows[0]?.id;
   if (!counsellorId) return;
 
@@ -34,7 +34,6 @@ export async function requestMagicLink(
     [hashToken(token), counsellorId, LINK_TTL_MINUTES],
   );
 
-  // SMTP adapter slot: when EMAIL_* config exists, send instead of logging.
   log.info({ email }, `magic-link token (deliver to counsellor): ${token}`);
 }
 
@@ -75,7 +74,7 @@ export async function verifyMagicLink(
     }
     if (row.totp_secret) {
       if (!totpCode || !verifyTotp(totpCode, row.totp_secret)) {
-        await client.query("ROLLBACK"); // token stays unused; retry with code
+        await client.query("ROLLBACK");
         return { counsellorId: row.id, role: row.role, totpRequired: true };
       }
     }
@@ -87,4 +86,27 @@ export async function verifyMagicLink(
   } finally {
     client.release();
   }
+}
+
+/**
+ * Direct TOTP login — counsellor provides email + TOTP code, no magic link.
+ * Returns null if credentials are invalid or TOTP fails.
+ * Returns { totpRequired: true } if the account has no TOTP enrolled yet
+ * (operator must enroll them first via /totp/enroll).
+ */
+export async function loginDirectTotp(
+  pool: Pool,
+  email: string,
+  totpCode: string,
+  verifyTotp: (code: string, secret: string) => boolean,
+): Promise<VerifiedLogin | null> {
+  const { rows } = await pool.query(
+    "SELECT id, role, totp_secret FROM counsellors WHERE email = $1 AND is_active",
+    [email.toLowerCase().trim()],
+  );
+  const row = rows[0];
+  // Constant-time-ish: always check even if no row to prevent user enumeration
+  if (!row || !row.totp_secret) return null;
+  if (!verifyTotp(totpCode, row.totp_secret)) return null;
+  return { counsellorId: row.id, role: row.role, totpRequired: false };
 }

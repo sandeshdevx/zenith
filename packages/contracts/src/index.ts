@@ -57,6 +57,7 @@ export const wsEventNameSchema = z.enum([
   "counsellor.alerted",
   "counsellor.accepted",
   "session.ended",
+  "pipeline.stage", // real-time pipeline telemetry
 ]);
 export type WsEventName = z.infer<typeof wsEventNameSchema>;
 
@@ -163,6 +164,33 @@ export const counsellorServerFrameSchema = z.discriminatedUnion("type", [
   }),
   z.object({ type: z.literal("alert.expired"), alertId: z.string() }),
   z.object({ type: z.literal("pong") }),
+  z.object({
+    type: z.literal("pipeline.stage"),
+    sessionId: z.string().uuid(),
+    messageId: z.string(),
+    stage: z.enum([
+      "message_received",
+      "sentinel_assessing",
+      "sentinel_complete",
+      "embedding_requested",
+      "embedding_received",
+      "s1_semantic_scoring",
+      "s1_complete",
+      "s2_screening",
+      "s2_complete",
+      "s3_prosody",
+      "s3_complete",
+      "fusion",
+      "tiered_response",
+      "alert_raised",
+      "handoff_room_created",
+      "complete",
+    ]),
+    status: z.enum(["started", "completed", "failed", "skipped"]),
+    durationMs: z.number().optional(),
+    data: z.record(z.unknown()).optional(),
+    timestamp: z.string().datetime(),
+  }),
 ]);
 export type CounsellorServerFrame = z.infer<typeof counsellorServerFrameSchema>;
 

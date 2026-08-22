@@ -7,6 +7,7 @@ import { Pool } from "pg";
 import PgBoss from "pg-boss";
 import { z } from "zod";
 import { KeywordSentinelAdapter, OllamaEmbeddingAdapter } from "@zenith/adapters";
+import { CounsellorServerFrame } from "@zenith/contracts";
 
 for (const candidate of [".env", "../../.env"]) {
   try {
@@ -16,7 +17,7 @@ for (const candidate of [".env", "../../.env"]) {
 }
 
 import { purgeExpiredSessions } from "./purge.js";
-import { CsiEngine } from "./csi.js";
+import { CsiEngine, type PipelineCallback } from "./csi.js";
 import {
   deliverRedFallback,
   expireStaleAlerts,
@@ -40,11 +41,26 @@ const env = envSchema.parse(process.env);
 const pool = new Pool({ connectionString: env.DATABASE_URL, max: 5 });
 pool.on("error", () => {});
 
+/** Broadcast pipeline telemetry to counsellor dashboards via pg_notify. */
+const broadcastPipeline: PipelineCallback = (telemetry) => {
+  const frame: CounsellorServerFrame = {
+    type: "pipeline.stage",
+    sessionId: telemetry.sessionId,
+    messageId: telemetry.messageId,
+    stage: telemetry.stage as any,
+    status: telemetry.status,
+    durationMs: telemetry.durationMs,
+    data: telemetry.data,
+    timestamp: telemetry.timestamp,
+  };
+  const payload = JSON.stringify(frame);
+  pool.query("SELECT pg_notify('zenith_pipeline', $1)", [payload]).catch(() => {});
+};
+
 const csiEngine = new CsiEngine(
   new KeywordSentinelAdapter(),
-  // CPU-only hosts need patience: the one-time 19-text pre-encoding batch
-  // can take ~30s cold; per-message embeds are single texts and fast.
   new OllamaEmbeddingAdapter({ baseUrl: env.OLLAMA_URL, model: env.EMBED_MODEL, timeoutMs: 180_000 }),
+  broadcastPipeline,
 );
 
 const boss = new PgBoss({ connectionString: env.DATABASE_URL });

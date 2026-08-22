@@ -198,7 +198,7 @@ export function registerSessionRoutes(
     },
   );
 
-  app.post<{ Params: { sessionId: string } }>(
+app.post<{ Params: { sessionId: string } }>(
     "/api/v1/sessions/:sessionId/end",
     async (req, reply) => {
       const { sessionId } = req.params;
@@ -206,12 +206,39 @@ export function registerSessionRoutes(
 
       await pool.query(
         `UPDATE sessions SET status = 'ended', ended_at = now()
-         WHERE id = $1 AND status <> 'ended'`,
+       WHERE id = $1 AND status <> 'ended'`,
         [sessionId],
       );
       reply.clearCookie(COOKIE_NAME, { path: "/" });
       // Content deletion is the purge worker's job and happens within a minute.
       return { ended: true };
+    },
+  );
+
+  // Crisis monitor: show recent risk assessments for development/debugging
+  app.get<{}>(
+    "/api/v1/crisis-monitor",
+    async (_req, reply) => {
+      const { rows } = await pool.query(
+        `SELECT ra.session_id, ra.tier, ra.score, ra.csi, ra.created_at,
+                 s.mode, s.status,
+                 (SELECT count(*) FROM session_messages sm WHERE sm.session_id = ra.session_id AND sender = 'user') as turn_count
+          FROM risk_assessments ra
+          JOIN sessions s ON s.id = ra.session_id
+          ORDER BY ra.id DESC
+          LIMIT 10`,
+      );
+      const sessions = rows.map((r: any) => ({
+        sessionId: r.session_id,
+        tier: r.tier,
+        csi: r.csi,
+        score: r.score,
+        turnCount: r.turn_count,
+        mode: r.mode,
+        status: r.status,
+        createdAt: r.created_at,
+      }));
+      return { sessions };
     },
   );
 }

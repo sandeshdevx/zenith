@@ -536,8 +536,12 @@ export default function App() {
         {/* Footer */}
         <footer className="w-full py-8 border-t border-[var(--border-hairline)] bg-[var(--bg-surface-soft)] text-center text-xs sm:text-sm text-[var(--color-ink-muted)] mt-auto transition-colors">
           <div className="max-w-4xl mx-auto px-4 flex flex-wrap items-center justify-center gap-6">
-            <a href="/counsellor/" className="hover:text-[var(--color-primary)] transition-colors underline decoration-[var(--color-primary)]/30 underline-offset-4">
+            <a href="http://localhost:3000/counsellor/" className="hover:text-[var(--color-primary)] transition-colors underline decoration-[var(--color-primary)]/30 underline-offset-4" target="_blank" rel="noopener">
               {t("landing.counsellorLink")}
+            </a>
+            <span>•</span>
+            <a href="http://localhost:3000/counsellor/" className="hover:text-[var(--color-primary)] transition-colors underline decoration-[var(--color-primary)]/30 underline-offset-4" target="_blank" rel="noopener">
+              {t("landing.crisisMonitorLink")}
             </a>
             <span>•</span>
             <a

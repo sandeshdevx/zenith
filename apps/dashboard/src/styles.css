@@ -1,35 +1,93 @@
 @import "tailwindcss";
 
+/* ── Zenith Design Tokens ── */
 @theme {
-  --font-serif: "Cormorant Garamond", Georgia, serif;
-  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-serif: "Cormorant Garamond", "Tiempos Headline", Georgia, serif;
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, monospace;
 }
 
+/* ── Light Surface ── */
 :root {
-  --bg-canvas: #faf9f5;
-  --bg-panel: #efe9de;
-  --border-line: #e6dfd8;
-  --color-text: #141413;
-  --color-dim: #6c6a64;
-  --color-teal: #2d6a4f;
-  --preview-bg: #f5f0e8;
+  color-scheme: light dark;
+
+  /* Canvas & Surfaces */
+  --bg-canvas:    #faf9f5;
+  --bg-panel:     #efe9de;
+  --bg-elevated:  #f5f0e8;
+  --bg-dark:      #181715;
+  --bg-dark-up:   #252320;
+
+  /* Borders */
+  --border-line:  #e6dfd8;
+  --border-soft:  #ebe6df;
+
+  /* Text */
+  --color-ink:    #141413;
+  --color-body:   #3d3d3a;
+  --color-dim:    #6c6a64;
+  --color-muted:  #8e8b82;
+  --color-on-dark: #faf9f5;
+
+  /* Coral – primary brand accent */
+  --coral:        #cc785c;
+  --coral-active: #a9583e;
+  --coral-dim:    #e6dfd8;
+
+  /* Semantic status */
+  --crisis-red:     #c64545;
+  --crisis-orange:  #e07a5f;
+  --crisis-green:   #52b788;
+  --crisis-amber:   #d4a017;
+  --crisis-blue:    #4a90d9;
+  --crisis-purple:  #9b59b6;
+
+  /* Interactive teal (primary action on dark) */
+  --teal:         #5db8a6;
+
+  /* Preview / aside */
+  --preview-bg:   #f5f0e8;
 }
 
+/* ── Dark Surface (default for the counsellor dashboard) ── */
 html.dark {
-  --bg-canvas: #121820;
-  --bg-panel: #1a2430;
-  --border-line: #263240;
-  --color-text: #faf9f5;
-  --color-dim: #a09d96;
-  --color-teal: #52b788;
-  --preview-bg: #121820;
+  color-scheme: dark;
+
+  --bg-canvas:    #0f1419;
+  --bg-panel:     #181d24;
+  --bg-elevated:  #1f2733;
+  --bg-dark:      #0b0e13;
+  --bg-dark-up:   #1a2030;
+
+  --border-line:  #263040;
+  --border-soft:  #1e2840;
+
+  --color-ink:    #faf9f5;
+  --color-body:   #c8c5be;
+  --color-dim:    #8e8b82;
+  --color-muted:  #6c6a64;
+  --color-on-dark: #faf9f5;
+
+  /* Coral stays warm on dark */
+  --coral:        #e08c6e;
+  --coral-active: #cc785c;
+  --coral-dim:    #3d2820;
+
+  --crisis-red:     #e05c5c;
+  --crisis-orange:  #e8965a;
+  --crisis-green:   #52d898;
+  --crisis-amber:   #e8c058;
+  --crisis-blue:    #6db3f2;
+  --crisis-purple:  #c48ce0;
+
+  --teal:         #5dd6c0;
+
+  --preview-bg:   #141a22;
 }
 
+/* ── Base Reset ── */
 @layer base {
-  *, ::before, ::after {
-    box-sizing: border-box;
-  }
+  *, ::before, ::after { box-sizing: border-box; }
 
   html, body, #root {
     height: 100%;
@@ -37,16 +95,133 @@ html.dark {
     padding: 0;
   }
 
-  body {
-    background-color: var(--bg-canvas);
-    color: var(--color-text);
-    font-family: var(--font-sans);
-    -webkit-font-smoothing: antialiased;
-    transition: background-color 0.25s ease, color 0.25s ease;
+  html {
+    scroll-behavior: smooth;
   }
 
-  :focus-visible {
-    outline: 2px solid var(--color-teal);
-    outline-offset: 2px;
+  body {
+    background-color: var(--bg-canvas);
+    color: var(--color-ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    touch-action: manipulation;
   }
+
+  /* Focus: accessible ring without outline flash on click */
+  :focus-visible {
+    outline: 2px solid var(--coral);
+    outline-offset: 3px;
+    border-radius: 4px;
+  }
+
+  /* Tabular numbers for data columns */
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  /* Prevent text orphans on headings */
+  h1, h2, h3 { text-wrap: balance; }
+
+  /* Skip link for keyboard users */
+  .skip-link {
+    position: absolute;
+    top: -100%;
+    left: 1rem;
+    z-index: 9999;
+    padding: 0.5rem 1rem;
+    background: var(--coral);
+    color: #fff;
+    border-radius: 0 0 6px 6px;
+    font-size: 0.875rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: top 0.2s;
+  }
+  .skip-link:focus { top: 0; }
+}
+
+/* ── Custom Scrollbar (dark surfaces) ── */
+.custom-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-line) transparent;
+}
+.custom-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+.custom-scroll::-webkit-scrollbar-track { background: transparent; }
+.custom-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-line);
+  border-radius: 3px;
+}
+
+/* ── Pulse ring for active status ── */
+@keyframes pulse-ring {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  70%  { transform: scale(2.2); opacity: 0; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+/* ── Slide-in for alert cards ── */
+@keyframes slide-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.alert-enter { animation: slide-in 0.28s ease both; }
+
+/* Respect reduced-motion */
+@media (prefers-reduced-motion: reduce) {
+  .alert-enter { animation: none; }
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
+
+/* ── Tier accent bar ── */
+.tier-red    { --accent: var(--crisis-red);    }
+.tier-orange { --accent: var(--crisis-orange); }
+.tier-green  { --accent: var(--crisis-green);  }
+
+/* ── Glassmorphism panel ── */
+.glass {
+  background: color-mix(in srgb, var(--bg-panel) 85%, transparent);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+/* ── Crisis Monitor Animations ── */
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+@keyframes bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.animate-fade-in { animation: fade-in 0.4s ease-out; }
+.animate-shimmer { animation: shimmer 2s infinite; }
+.animate-bounce { animation: bounce 1s infinite; }
+
+/* ── Pipeline Visualization Animations ── */
+@keyframes pipeline-fade-in {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes pulse-ring {
+  0% { box-shadow: 0 0 0 0 var(--crisis-amber)80; }
+  70% { box-shadow: 0 0 0 10px var(--crisis-amber)00; }
+  100% { box-shadow: 0 0 0 0 var(--crisis-amber)00; }
+}
+@keyframes flow {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.animate-pipeline-fade-in { animation: pipeline-fade-in 0.2s ease-out; }
+.animate-flow { animation: flow 2s ease-in-out infinite; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-flow, .animate-pulse, .animate-spin { animation: none !important; }
+  * { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
 }

@@ -4,6 +4,7 @@ import tailwindcss from "@tailwindcss/vite";
 
 export default defineConfig({
   plugins: [tailwindcss(), react()],
+  base: "/counsellor/",
   server: {
     port: 5174,
     proxy: {
@@ -12,6 +13,10 @@ export default defineConfig({
         ws: true,
       },
     },
+  },
+  build: {
+    outDir: "dist",
+    emptyOutDir: true,
   },
 });
 

@@ -118,6 +118,18 @@ export interface CsiInputs {
   turnCount: number;
 }
 
+export interface PipelineTelemetry {
+  sessionId: string;
+  messageId: string;
+  stage: string;
+  status: "started" | "completed" | "failed" | "skipped";
+  durationMs?: number;
+  data?: Record<string, unknown>;
+  timestamp: string;
+}
+
+export type PipelineCallback = (telemetry: PipelineTelemetry) => void;
+
 export interface CsiResult {
   s1: number;
   s2: number;
@@ -138,6 +150,7 @@ export class CsiEngine {
   constructor(
     private readonly sentinel: RiskAdapter,
     private readonly embedder: EmbeddingAdapter,
+    private readonly onPipeline?: PipelineCallback,
   ) {}
 
   /**
@@ -196,24 +209,66 @@ export class CsiEngine {
     return this.embedderReady;
   }
 
+  private emitPipeline(
+    input: CsiInputs,
+    stage: string,
+    status: "started" | "completed" | "failed" | "skipped",
+    durationMs?: number,
+    data?: Record<string, unknown>,
+  ): void {
+    if (this.onPipeline) {
+      this.onPipeline({
+        sessionId: input.sessionId,
+        messageId: input.messageId,
+        stage,
+        status,
+        durationMs,
+        data,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
   async assess(pool: Pool, input: CsiInputs): Promise<CsiResult> {
     const signals: string[] = [];
+    const assessStart = Date.now();
+
+    this.emitPipeline(input, "message_received", "completed", 0, { turnCount: input.turnCount });
 
     // --- S1: NLP Sentiment Engine (102) -----------------------------------
+    this.emitPipeline(input, "sentinel_assessing", "started");
+    const sentinelStart = Date.now();
     const sentinelResult = await this.sentinel.assess(input.content);
+    this.emitPipeline(input, "sentinel_complete", "completed", Date.now() - sentinelStart, {
+      sentinelTier: sentinelResult.tier,
+      sentinelSignals: sentinelResult.signals,
+    });
     signals.push(...sentinelResult.signals);
     let s1 = SENTINEL_S1[sentinelResult.tier];
 
     let turnVector: number[] | null = null;
     if (this.embedderReady) {
+      this.emitPipeline(input, "embedding_requested", "started");
+      const embedStart = Date.now();
       try {
         const [vector] = await this.embedder.embed([input.content]);
         turnVector = vector ?? null;
-      } catch {
-        this.embedderReady = false; // re-established on next initialize()
+        this.emitPipeline(input, "embedding_received", "completed", Date.now() - embedStart, {
+          vectorDim: vector?.length ?? 0,
+        });
+      } catch (e) {
+        this.embedderReady = false;
+        this.emitPipeline(input, "embedding_received", "failed", Date.now() - embedStart, {
+          error: (e as Error).message,
+        });
       }
+    } else {
+      this.emitPipeline(input, "embedding_requested", "skipped", 0, { reason: "embedder not ready" });
     }
+
     if (turnVector) {
+      this.emitPipeline(input, "s1_semantic_scoring", "started");
+      const s1Start = Date.now();
       let best = 0;
       for (const proto of this.distressVectors) {
         best = Math.max(best, cosineSimilarity(turnVector, proto));
@@ -226,17 +281,27 @@ export class CsiEngine {
         s1 = semantic;
         signals.push("semantic-distress");
       }
+      this.emitPipeline(input, "s1_semantic_scoring", "completed", Date.now() - s1Start, {
+        bestSimilarity: best,
+        semanticScore: semantic,
+        finalS1: s1,
+      });
+    } else {
+      this.emitPipeline(input, "s1_semantic_scoring", "skipped", 0, { reason: "no embedding" });
     }
+    this.emitPipeline(input, "s1_complete", "completed", 0, { s1, signals: [...signals] });
 
     // --- S2: Implicit Clinical Screening Mapper (103, 201–203) ------------
+    this.emitPipeline(input, "s2_screening", "started");
+    const s2Start = Date.now();
     let s2 = 0;
     if (turnVector && this.itemVectors) {
+      let matchedItems = 0;
       for (const item of CLINICAL_ITEMS) {
         const sim = cosineSimilarity(turnVector, this.itemVectors.get(item.id) ?? []);
         const threshold = this.itemThresholds.get(item.id) ?? MIN_ITEM_THRESHOLD;
         if (sim >= threshold) {
           const itemScore = clamp01((sim - threshold) / (0.95 - threshold)) * 100;
-          // Item Score Accumulator (203): keep the best match per item.
           await pool.query(
             `INSERT INTO risk_screening (session_id, item_id, score)
              VALUES ($1, $2, $3)
@@ -245,24 +310,50 @@ export class CsiEngine {
             [input.sessionId, item.id, itemScore],
           );
           signals.push(`screen:${item.id}`);
+          matchedItems++;
         }
       }
       s2 = await this.compositeScreeningScore(pool, input.sessionId);
+      this.emitPipeline(input, "s2_screening", "completed", Date.now() - s2Start, {
+        matchedItems,
+        s2,
+      });
+    } else {
+      this.emitPipeline(input, "s2_screening", "skipped", 0, { reason: turnVector ? "no item vectors" : "no embedding" });
     }
+    this.emitPipeline(input, "s2_complete", "completed", 0, { s2 });
 
     // --- S3: Speech Prosody Extractor (104, 301–304) ----------------------
+    this.emitPipeline(input, "s3_prosody", "started");
+    const s3Start = Date.now();
     let s3: number | null = null;
     if (input.prosody && isPlausibleProsody(input.prosody)) {
       s3 = scoreProsody(input.prosody);
       signals.push("prosody");
+      this.emitPipeline(input, "s3_prosody", "completed", Date.now() - s3Start, {
+        prosodyFeatures: input.prosody,
+        s3,
+      });
+    } else {
+      this.emitPipeline(input, "s3_prosody", "skipped", 0, {
+        reason: input.prosody ? "implausible prosody" : "no prosody data",
+      });
     }
+    this.emitPipeline(input, "s3_complete", "completed", 0, { s3 });
 
     // --- Fusion (105) ------------------------------------------------------
+    this.emitPipeline(input, "fusion", "started");
+    const fusionStart = Date.now();
     const weights = fusionWeights(input.turnCount, s3 !== null);
     const csi = Math.round(
       weights.w1 * s1 + weights.w2 * s2 + weights.w3 * (s3 ?? 0),
     );
     const tier = csiToTier(csi);
+    this.emitPipeline(input, "fusion", "completed", Date.now() - fusionStart, {
+      weights,
+      csi,
+      tier,
+    });
 
     // Safety floor: an explicit RED sentinel hit (stated intent) is never
     // diluted below Tier 3 by fusion averaging.
@@ -270,6 +361,24 @@ export class CsiEngine {
       sentinelResult.tier === "red" && RISK_TIER_RANK[tier] < RISK_TIER_RANK.orange
         ? { csi: Math.max(csi, 60), tier: "orange" as RiskTier }
         : { csi, tier };
+
+    this.emitPipeline(input, "tiered_response", "started");
+    const tierStart = Date.now();
+    this.emitPipeline(input, "tiered_response", "completed", Date.now() - tierStart, {
+      flooredTier: floored.tier,
+      flooredCsi: floored.csi,
+      sentinelTier: sentinelResult.tier,
+    });
+
+    this.emitPipeline(input, "complete", "completed", Date.now() - assessStart, {
+      s1: Math.round(s1),
+      s2: Math.round(s2),
+      s3,
+      csi: floored.csi,
+      tier: floored.tier,
+      weights,
+      signals,
+    });
 
     return { s1: Math.round(s1), s2: Math.round(s2), s3, ...floored, weights, signals };
   }
